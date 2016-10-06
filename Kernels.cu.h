@@ -3,11 +3,11 @@
 #include <cuda_runtime.h>
 
 template <class T>
-	__global__ void mapKer(unsigned int  tot_size,
-												 unsigned int hist_size,
-												 T             boundary,
-												 T*                d_in,
-												 int*             d_out){
+__global__ void mapKer(unsigned int  tot_size,
+											 unsigned int hist_size,
+											 T             boundary,
+											 T*                d_in,
+											 int*             d_out){
 	const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (gid < tot_size) {
 		// ... implement f for index corresponding to indices.
