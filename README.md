@@ -1,7 +1,6 @@
-WELCOME
+WELCOME TO THE LARGE SCALE HISTOGRAM PROJECT
 
 Histogram project for Programming Massively Parrallel Hardware.
-
 
 histMain         -- Controls testing and benchmarking
 
