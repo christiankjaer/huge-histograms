@@ -14,7 +14,7 @@ int main () {
   const unsigned int mem_size = sizeof(float[row][col]);
 
   float *data = (float *) malloc(mem_size);
-  
+
   genArray<float> (row*col, range, data);
 
   for (int i = 0; i < row; i++) {
