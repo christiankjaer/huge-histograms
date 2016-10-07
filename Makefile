@@ -8,6 +8,7 @@ clean:
 radix:
 	make -s recompile
 	./radix
+	make -s clean
 
 recompile:
 	make -s clean
