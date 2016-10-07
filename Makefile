@@ -1,3 +1,5 @@
+default:
+	nvcc -Wno-deprecated-gpu-targets -o hist ./histMain.cu	
 
 compile:
 	nvcc -Wno-deprecated-gpu-targets -o radix ./radix.cu
@@ -5,6 +7,8 @@ compile:
 
 clean:
 	rm -f ./radix
+	rm -f ./hist
+	rm -f ./tests
 
 tests:
 	make -s recompile

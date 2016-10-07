@@ -1,8 +1,11 @@
 #ifndef HOST_HIST
 #define HOST_HIST
 #define GPU_HISTOGRAM_SIZE 8192
-#define SHARED_MEMORY_SIZE 13   // bits
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
 #include <cub/cub.cuh>
 #include "Kernels.cu.h"
 
@@ -41,8 +44,9 @@ void histogram_radix_sort(int* array_to_be_sorted,
   cudaMemcpy(d_keys_in, array_to_be_sorted, sizeof(int)*array_length,
              cudaMemcpyHostToDevice);
 
-  int    begin_bit          = SHARED_MEMORY_SIZE;
-  int    end_bit            = ceil(log2(GPU_HISTOGRAM_SIZE));
+  int    begin_bit = ceil(log2((float)GPU_HISTOGRAM_SIZE));
+  int    end_bit   = sizeof(int)*8; // TODO, write a more intelligent version
+
   void   *d_temp_storage    = NULL;
   size_t temp_storage_bytes = 0;
 
@@ -75,4 +79,5 @@ void histogram_radix_sort(int* array_to_be_sorted,
   cudaFree(d_temp_storage);
 }
 
-#endif HOST_HIST //
+#endif //HOST_HIST
+

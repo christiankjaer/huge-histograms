@@ -14,4 +14,4 @@ __global__ void mapIndKernel(unsigned int  tot_size,
   }
 }
 
-#endif KERNELS_HIST //
+#endif //KERNELS_HIST
