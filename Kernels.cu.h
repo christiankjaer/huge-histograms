@@ -15,4 +15,4 @@ __global__ void mapKer(unsigned int  tot_size,
   }
 }
 
-#endif KERNELS_HIST
+#endif //KERNELS_HIST
