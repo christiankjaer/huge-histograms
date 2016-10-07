@@ -1,52 +1,39 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include "histCPU.cu.h"
-
-void fill_array(int* array, int array_length){
-  for (int i = 0; i < array_length; i++){
-    array[i] = (int)rand() % 30000;
-  }
-}
-
-__inline__ void make_keys(int* A, int* K, int N, int MASK){
-  for (int i = 0; i < N; i++){
-    K[i] = A[i] & MASK;
-  }
-}
-
-void print_array(int* array, int array_length){
-  printf("[");
-  int j = 0;
-  for (int i = 0; i < array_length; i++){
-    printf("%d", array[i]);
-    if (i != array_length-1){
-      printf(",");
-      j = j;
-      printf("\n");
-    }
-  }
-  printf("].\n");
-}
+#include "Host.cu.h"
+#include "sequential/histCPU.cu.h"
+#include "sequential/arraylib.cu.h"
 
 // A way to compute histram indexes for the large/huge histogram
 int main (){
 
-  int  array_length        = 32;
-  int* array_to_be_sorted  = (int*)malloc(array_length * sizeof(int));
+  int  array_length = 1024;
+  int* input_array  = (int*)malloc(array_length * sizeof(int));
 
+  fill_array(input_array,  array_length);
+  radix_sort(input_array,  array_length);
+  print_array(input_array, array_length);
 
+  int  num_segments        = ceil((float)array_length / GPU_HISTOGRAM_SIZE);
+  int* segment_size_offset = (int*)malloc(num_segments * sizeof(int));
 
-  fill_array(array_to_be_sorted, array_length);
-  histogram_radix_sort(array_to_be_sorted, array_length);
+  zero_array(segment_size_offset, num_segments);
 
+  printf("num_segments %d\n", num_segments);
 
+  // TODO : add a function which computes indexes.
 
+  int histogram_size = ceil((float)MAX_RANDOM_NUMBER_SIZE/8192);
 
-  print_array(array_to_be_sorted,array_length);
+  segmentSize(input_array,
+              segment_size_offset,
+              array_length,
+              histogram_size);
 
+  scan_exc(segment_size_offset, histogram_size);
+  print_array(segment_size_offset, histogram_size);
 
-
-  free(array_to_be_sorted);
+  free(segment_size_offset);
+  free(input_array);
 }
-

@@ -1,8 +1,25 @@
 #ifndef ARRAY_LIB
+#define MAX_RANDOM_NUMBER_SIZE 30000
 
 void fill_array(int* array, int array_length){
   for (int i = 0; i < array_length; i++){
-    array[i] = (int)rand() % 30000;
+    array[i] = (int)rand() % MAX_RANDOM_NUMBER_SIZE;
+  }
+}
+
+void zero_array(int* array, int array_length){
+  for (int i = 0; i < array_length; i++){
+    array[i] = 0;
+  }
+}
+
+void scan_exc(int* array, int array_length){
+  for (int i = 1; i < array_length; i++){
+    array[i] = array[i-1];
+  }
+  array[0] = 0;
+  for (int i = 1; i < array_length; i++){
+    array[i] = array[i-1] + array[i];
   }
 }
 
@@ -16,11 +33,11 @@ void print_array(int* array, int array_length){
   printf("[");
   int j = 0;
   for (int i = 0; i < array_length; i++){
-    printf("%d", array[i]);
+    printf("%6d", array[i]);
     if (i != array_length-1){
       printf(",");
-      j = j;
-      printf("\n");
+      if (j == 10) {printf("\n "); j = 0;}
+      else{j++;}
     }
   }
   printf("].\n");

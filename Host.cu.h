@@ -33,8 +33,8 @@ void histIndex (unsigned int      d_size,
     <<<num_blocks, block_size>>>(d_size, d_hist_size, boundary, d_in, d_out);
 }
 
-void histogram_radix_sort(int* array_to_be_sorted,
-                          int  array_length){
+void radix_sort(int* array_to_be_sorted,
+                int  array_length){
 
   // Allocate device memory
   int* d_keys_in;
