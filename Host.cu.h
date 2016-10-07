@@ -16,4 +16,4 @@ void arraySgm (unsigned int      d_size,
   mapKer<T><<<num_blocks, block_size>>>(d_size, d_hist_size, boundary, d_in, d_out);
 }
 
-#endif HOST_HIST
+#endif //HOST_HIST
