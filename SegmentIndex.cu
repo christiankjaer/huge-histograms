@@ -8,32 +8,37 @@
 // A way to compute histram indexes for the large/huge histogram
 int main (){
 
+  // Create input array (max val defined by MAX_RANDOM_NUMBER_SIZE)
   int  array_length = 1024;
-  int* input_array  = (int*)malloc(array_length * sizeof(int));
+  float* input_arr  = (float*)malloc(array_length * sizeof(float));
+  fill_array(input_arr, array_length);
 
-  fill_array(input_array,  array_length);
-  radix_sort(input_array,  array_length);
-  print_array(input_array, array_length);
+  // Convert to indices in a histogram
+  int size_hist = 10000;
+  int* hist_idx_arr = (int*)malloc(array_length * sizeof(int));
+  arr_to_hist_idx(input_arr,hist_idx_arr,array_length,size_hist,MAX_RANDOM_NUMBER_SIZE);
+
+  // Sort indices by the 13th bit (shared memory size for a block on GPU)
+  radix_sort(hist_idx_arr,  array_length);
+  print_array(hist_idx_arr, array_length);
 
   int  num_segments        = ceil((float)array_length / GPU_HISTOGRAM_SIZE);
-  int* segment_size_offset = (int*)malloc(num_segments * sizeof(int));
+  int* segment_offset_arr = (int*)malloc(num_segments * sizeof(int));
 
-  zero_array(segment_size_offset, num_segments);
+  zero_array(segment_offset_arr, num_segments);
 
   printf("num_segments %d\n", num_segments);
 
   // TODO : add a function which computes indexes.
 
-  int histogram_size = ceil((float)MAX_RANDOM_NUMBER_SIZE/8192);
+  segmentSize(hist_idx_arr,
+              segment_offset_arr,
+              array_length);
 
-  segmentSize(input_array,
-              segment_size_offset,
-              array_length,
-              histogram_size);
+  scan_exc(segment_offset_arr, num_segments);
+  print_array(segment_offset_arr, num_segments);
 
-  scan_exc(segment_size_offset, histogram_size);
-  print_array(segment_size_offset, histogram_size);
-
-  free(segment_size_offset);
-  free(input_array);
+  free(segment_offset_arr);
+  free(input_arr);
+  free(hist_idx_arr);
 }

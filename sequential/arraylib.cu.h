@@ -1,9 +1,18 @@
 #ifndef ARRAY_LIB
 #define MAX_RANDOM_NUMBER_SIZE 30000
 
-void fill_array(int* array, int array_length){
+void arr_to_hist_idx(float* input_arr, int* hist_inds,
+		     int size_arr, int size_hist, int input_max) {
+
+  for (int i=0; i<size_arr; i++) {
+    hist_inds[i] = (int)((input_arr[i]/input_max)*(float)size_hist);
+  }
+  
+}
+
+void fill_array(float* array, int array_length){
   for (int i = 0; i < array_length; i++){
-    array[i] = (int)rand() % MAX_RANDOM_NUMBER_SIZE;
+    array[i] = (float)(rand() % MAX_RANDOM_NUMBER_SIZE);
   }
 }
 

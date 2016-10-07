@@ -3,7 +3,7 @@ default:
 
 compile:
 	nvcc -Wno-deprecated-gpu-targets -o radix  ./radix.cu
-	nvcc -Wno-deprecated-gpu-targets -o tests  ./tests.cu
+#nvcc -Wno-deprecated-gpu-targets -o tests  ./tests.cu
 	nvcc -Wno-deprecated-gpu-targets -o segind ./SegmentIndex.cu
 
 clean:
