@@ -15,6 +15,14 @@ void arr2HistIdxSeq(float* input_arr, int* hist_inds,
   }
 }
 
+template<class T>
+T maximumElementSeq(T* array, arr_size){
+  T my_max = array[0];
+  for (int i = 1; i < arr_size; i++){
+    my_max = max (my_max, array[i]);
+  }
+}
+
 
 // @summary : fills an array with random floats
 void randArrSeq(float* array, int array_length, float max_rand_num){
