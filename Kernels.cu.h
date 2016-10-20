@@ -22,10 +22,11 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 
   // Thread index
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  // Block dimension
+  // Block dimension (# of threads per block)
   const unsigned int bdx = blockDim.x;
-  //
+  // # of threads assigned to each chunk
   const unsigned int hist_elems = CHUNK_SIZE / bdx;
+  // # of tasks per thread
   const unsigned int tot_elems = tot_size / bdx;
 
   if (gid < tot_size) {
