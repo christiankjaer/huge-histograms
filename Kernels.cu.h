@@ -19,10 +19,12 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
                                 int*              hist) {
 
   __shared__ int Hsh[CHUNK_SIZE];
-
-
+  
+  // Thread index
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  // Block dimension
   const unsigned int bdx = blockDim.x;
+  //
   const unsigned int hist_elems = CHUNK_SIZE / bdx;
   const unsigned int tot_elems = tot_size / bdx;
 
