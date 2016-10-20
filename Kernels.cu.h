@@ -15,6 +15,7 @@ __global__ void mapIndKernel(unsigned int  tot_size,
   }
 }
 
+
 __global__ void naiveHistKernel(unsigned int  tot_size,
                                 int*              inds,
                                 int*              hist) {
@@ -42,5 +43,41 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
   }
 
 }
+
+__global__ void segmentedHistKernel(unsigned int tot_size,
+                                    unsigned int num_sgm,
+                                    int *sgmts,
+                                    int *inds,
+                                    int *hist) {
+
+  __shared__ int Hsh[GPU_HIST_SIZE];
+
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+  while (/* */) {
+
+    if (/* gid in working set */) {
+      // write into shared histogram
+      // using atomicAdd()
+    }
+
+    __syncthreads();
+    // Write shared histogram to global histogram
+
+    __syncthreads();
+  }
+
+
+
+}
+
+// In the case of segments
+// Keep index of current sub-histogram
+// While (!all_segments_done)
+//   if (gid in current segment)
+//     do work
+//   __syncthreads()
+//   segment++
+//   commit to memory
 
 #endif //KERNELS_HIST
