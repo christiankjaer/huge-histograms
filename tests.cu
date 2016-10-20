@@ -66,22 +66,36 @@ void compareTestEps(T* result, T* expected, int size, T eps){
 int main (int args, char** argv){
 
   printf("TESTING RADIX SORT\n");
+
+  // declare initial values
   int    data_size    = 1024*32;
   float  max_rand_num = 30000.0;
   float* data         = (float*)malloc(data_size * sizeof(float));
   int*   inds_seq     = (int*)malloc(data_size * sizeof(int));
   int*   inds_par     = (int*)malloc(data_size * sizeof(int));
+
+  // fill the data array with random values
   randArrSeq(data, data_size, max_rand_num);
+
+  // generate and sort the index values sequentially
   arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num);
   radixSort(inds_seq, data_size);
-  sortTest(inds_seq, data_size);
-  update();
+
+  // generate and sort the index values in parallel
   histVals2Index<float>(data_size, max_rand_num, data, inds_par);
   radixSort(inds_par, data_size);
+
+  // test that the partial sorting is korrekt
+  sortTest(inds_seq, data_size);
+  update();
   sortTest(inds_par, data_size);
   update();
+
+  // ensure that the two index arrays match
   compareTest<int>(inds_par, inds_seq, data_size);
   update();
+
+  // clean up memory
   free(data);
   free(inds_seq);
   free(inds_par);
