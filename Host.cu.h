@@ -18,6 +18,97 @@ class Addition {
   static __device__ __host__ inline T apply(const T t1, const T t2) { return t1 + t2; }
 };
 
+// @class   : The addition function, where e = 0 and apply(t1, t2) = max(t1, t2)
+// @remarks : The neutral element e = 0 comes from the assertion that
+//            all values in the image are non-negative
+template<class T>
+class Maximum {
+ public:
+  typedef T BaseType;
+  static __device__ __host__ inline T identity()                    { return (T)0; }
+  static __device__ __host__ inline T apply(const T t1, const T t2) { max(t1, t2); }
+};
+
+template<class OP, class T>
+void scanInc(unsigned long arr_size,
+             T*            arr_in,
+             T*            arr_out) {
+
+  unsigned int num_blocks  = ceil(arr_size / (float)CUDA_BLOCK_SIZE);
+  unsigned int sh_mem_size = CUDA_BLOCK_SIZE * 32; // or just all of it !
+
+  T* d_in;
+  T* d_out;
+  cudaMalloc((void**)&d_in,  arr_size * sizeof(T));
+  cudaMalloc((void**)&d_out, arr_size * sizeof(T));
+  cudaMemcpy(d_in, arr_in, arr_size * sizeof(T), cudaMemcpyHostToDevice);
+
+  scanIncKernel<OP,T><<< num_blocks, CUDA_BLOCK_SIZE, sh_mem_size >>>
+    (d_in, d_out, arr_size);
+  cudaThreadSynchronize();
+
+  // BASE CASE :
+  // The reduction could fit into one cuda block, and we are done.
+
+  if (CUDA_BLOCK_SIZE >= arr_size) {
+    cudaMemcpy(d_out, arr_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
+    cudaFree(d_in);
+    cudaFree(d_out);
+    return;
+  }
+
+  // RECURSIVE CASE:
+  // we copy the end of each CUDA_BLOCK_SIZE blocks, and scan again !
+
+  // Allocate new device input & output array of size num_blocks
+  T* d_rec_in;
+  T* d_rec_out;
+  cudaMalloc((void**)&d_rec_in , num_blocks*sizeof(T));
+  cudaMalloc((void**)&d_rec_out, num_blocks*sizeof(T));
+
+  unsigned int num_blocks_rec = ceil(num_blocks / (float)CUDA_BLOCK_SIZE);
+
+  // Copy in the end-of-block results of the previous scan
+  copyEndOfBlockKernel<T><<< num_blocks_rec, CUDA_BLOCK_SIZE >>>
+    (d_out, d_rec_in, num_blocks);
+  cudaThreadSynchronize();
+
+  // Scan recursively the last elements of each CUDA block
+  scanInc<OP, T>(CUDA_BLOCK_SIZE, num_blocks, d_rec_in, d_rec_out);
+
+  // Distribute the the corresponding element of the
+  // recursively scanned data to all elements of the
+  // corresponding original block
+  distributeEndBlock<OP, T><<< num_blocks, CUDA_BLOCK_SIZE >>>
+    (d_rec_out, d_out, arr_size);
+  cudaThreadSynchronize();
+
+  // Copy back the result of the scan
+  cudaMemcpy(d_out, arr_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
+
+  // Clean up memory.
+  cudaFree(d_in);
+  cudaFree(d_out);
+  cudaFree(d_rec_in );
+  cudaFree(d_rec_out);
+}
+
+// @summary : computes the maximum value in an array of values of type T.
+template<class T>
+T maximumElement(T* arr, int arr_size){
+
+  // Scan with the maximum class.
+  T* output = (T*)malloc(arr_size * sizeof(T));
+  scanInc<Maximum<float>, float>(arr_size, arr, output);
+
+  // Pick the last element
+  T  result = output[arr_size-1];
+
+  // Clean up memory
+  free(output);
+  return result;
+}
+
 // @summary : Normalizes the dateset, and computes histogram indexes.
 // @remarks : Asserts the value and index arrays to have the same sizes.
 // @params  : block_size -> size of the CUDA blocks to be used
