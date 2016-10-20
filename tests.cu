@@ -32,11 +32,11 @@ bool myAssert(bool test){
 // @test : asserts the inds array has been partially sorted.
 void sortTest0(int* inds, int data_size){
   int _min = 0;
-  int _max = CHUNCK_SIZE;
+  int _max = CHUNK_SIZE;
   for (int i = 0; i < data_size; i++){
     while (inds[i] >= _max){
-      _min += CHUNCK_SIZE;
-      _max += CHUNCK_SIZE;
+      _min += CHUNK_SIZE;
+      _max += CHUNK_SIZE;
     }
    if (!myAssert(_min <= inds[i] && inds[i] < _max)) return;
   }

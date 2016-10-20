@@ -2,6 +2,7 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
+// Maps array to histogram indices.
 template <class T>
 __global__ void histIndKernel(float* input_arr_d,
                              int*   hist_inds_d,
@@ -17,12 +18,12 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
                                 int*              inds,
                                 int*              hist) {
 
-  __shared__ int Hsh[CHUNCK_SIZE];
+  __shared__ int Hsh[CHUNK_SIZE];
 
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   const unsigned int bdx = blockDim.x;
-  const unsigned int hist_elems = CHUNCK_SIZE / bdx;
+  const unsigned int hist_elems = CHUNK_SIZE / bdx;
   const unsigned int tot_elems = tot_size / bdx;
 
   if (gid < tot_size) {

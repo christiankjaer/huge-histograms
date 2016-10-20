@@ -5,9 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <cub/cub.cuh>
+#include <../cub/cub.cuh>
 #include "Kernels.cu.h"
 #include "setup.cu.h"
+
+// Finds least and most significant bit
+#define BEGIN_BIT                ceil(log2((float) CHUNK_SIZE))
+#define END_BIT   max(BEGIN_BIT, ceil(log2((float) HISTOGRAM_SIZE)))
 
 // A function which performs addition,
 template<class T>
@@ -40,10 +44,6 @@ void radixSort(int* array_to_be_sorted,
   cudaMemcpy(d_keys_in, array_to_be_sorted, sizeof(int)*array_length,
              cudaMemcpyHostToDevice);
 
-  // TODO : (write this more intelligently)
-  int    begin_bit = ceil(log2((float)CHUNCK_SIZE));
-  int    end_bit   = sizeof(int)*RADIX_END_BIT;
-
   void   *d_temp_storage    = NULL;
   size_t temp_storage_bytes = 0;
 
@@ -53,8 +53,8 @@ void radixSort(int* array_to_be_sorted,
                                  d_keys_in,
                                  d_keys_out,
                                  array_length,
-                                 begin_bit,
-                                 end_bit);
+                                 BEGIN_BIT,
+                                 END_BIT);
   cudaMalloc(&d_temp_storage, temp_storage_bytes);
 
   // Call the library function
@@ -63,8 +63,8 @@ void radixSort(int* array_to_be_sorted,
                                  d_keys_in,
                                  d_keys_out,
                                  array_length,
-                                 begin_bit,
-                                 end_bit);
+                                 BEGIN_BIT,
+                                 END_BIT);
 
   // Write back the result
   cudaMemcpy(array_to_be_sorted, d_keys_out, sizeof(int)*array_length,
