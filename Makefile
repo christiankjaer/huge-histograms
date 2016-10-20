@@ -23,3 +23,7 @@ tests:
 recompile:
 	make -s clean
 	make -s compile
+
+backup:
+	make -s clean
+	cp -r ./* ../backup/
