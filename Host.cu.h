@@ -70,8 +70,11 @@ void radixSort(int* array_to_be_sorted,
   void   *d_temp_storage    = NULL;
   size_t temp_storage_bytes = 0;
 
-  int begin_bit =                     ceil(log2((float) CHUNK_SIZE));
-  int end_bit   = max(begin_bit, (int)ceil(log2((float) HISTOGRAM_SIZE)));
+
+  // TODO : Figure out an intelligent way of computing end bit [-.-]
+  int begin_bit = ceil(log2((float) CHUNK_SIZE));
+  int end_bit   = sizeof(int)*8;
+  /* int end_bit   = max(begin_bit, (int)ceil(log2((float) HISTOGRAM_SIZE))); */
 
   // Figure out how much tempoary storage is needed
   cub::DeviceRadixSort::SortKeys(d_temp_storage,
