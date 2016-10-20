@@ -3,10 +3,10 @@
 #include "setup.cu.h"
 
 template <class T>
-__global__ void histIndKernel(float* input_arr_d,
-                             int*   hist_inds_d,
-                             int    size_arr,
-                             float  max_input){
+__global__ void histVals2IndexKernel(float* input_arr_d,
+                              int*   hist_inds_d,
+                              int    size_arr,
+                              float  max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < size_arr){
     hist_inds_d[gid] = (int)((input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
