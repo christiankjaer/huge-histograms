@@ -68,21 +68,28 @@ int main (int args, char** argv){
   printf("TESTING RADIX SORT\n");
 
   // declare initial values
-  int    data_size    = 1024*32;
-  float  max_rand_num = 30000.0;
-  float* data         = (float*)malloc(data_size * sizeof(float));
-  int*   inds_seq     = (int*)malloc(data_size * sizeof(int));
-  int*   inds_par     = (int*)malloc(data_size * sizeof(int));
+  int    data_size     = 1024*32;
+  float  max_rand_num1 = 30000.0;
+  float  max_rand_num2 = 0.0;
+  float* data          = (float*)malloc(data_size * sizeof(float));
+  int*   inds_seq      = (int*)malloc(data_size * sizeof(int));
+  int*   inds_par      = (int*)malloc(data_size * sizeof(int));
 
   // fill the data array with random values
-  randArrSeq(data, data_size, max_rand_num);
+  randArrSeq(data, data_size, max_rand_num1);
+
+  // check that the maximum number scan succeded.
+  max_rand_num1 = maximumElementSeq(data, data_size);
+  max_rand_num2 = maximumElement<float>(data, data_size);
+  myAssert(max_rand_num1 == max_rand_num2);
+  update();
 
   // generate and sort the index values sequentially
-  arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num);
+  arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num1);
   radixSort(inds_seq, data_size);
 
   // generate and sort the index values in parallel
-  histVals2Index<float>(data_size, max_rand_num, data, inds_par);
+  histVals2Index<float>(data_size, data, inds_par);
   radixSort(inds_par, data_size);
 
   // test that the partial sorting is korrekt

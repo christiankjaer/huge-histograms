@@ -25,8 +25,9 @@ template<class T>
 class Maximum {
  public:
   typedef T BaseType;
-  static __device__ __host__ inline T identity()                    { return (T)0; }
-  static __device__ __host__ inline T apply(const T t1, const T t2) { max(t1, t2); }
+  static __device__ __host__ inline T identity() { return (T)0; }
+  static __device__ __host__ inline T apply(const T t1, const T t2)
+  { return max(t1, t2); }
 };
 
 template<class OP, class T>
@@ -51,7 +52,7 @@ void scanInc(unsigned long arr_size,
   // The reduction could fit into one cuda block, and we are done.
 
   if (CUDA_BLOCK_SIZE >= arr_size) {
-    cudaMemcpy(d_out, arr_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
+    cudaMemcpy(arr_out, d_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
     cudaFree(d_in);
     cudaFree(d_out);
     return;
@@ -74,7 +75,7 @@ void scanInc(unsigned long arr_size,
   cudaThreadSynchronize();
 
   // Scan recursively the last elements of each CUDA block
-  scanInc<OP, T>(CUDA_BLOCK_SIZE, num_blocks, d_rec_in, d_rec_out);
+  scanInc<OP, T>(num_blocks, d_rec_in, d_rec_out);
 
   // Distribute the the corresponding element of the
   // recursively scanned data to all elements of the
@@ -84,7 +85,7 @@ void scanInc(unsigned long arr_size,
   cudaThreadSynchronize();
 
   // Copy back the result of the scan
-  cudaMemcpy(d_out, arr_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
+  cudaMemcpy(arr_out, d_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
 
   // Clean up memory.
   cudaFree(d_in);
@@ -118,11 +119,11 @@ T maximumElement(T* arr, int arr_size){
 //            inds_h     -> a pointer to the host allocated index array
 template<class T>
 void histVals2Index (unsigned int    arr_size,
-                     int             boundary,
                      T*                vals_h,
                      int*              inds_h){
 
   int num_blocks = ceil(arr_size / CUDA_BLOCK_SIZE);
+  T boundary = maximumElement<T>(vals_h, arr_size);
 
   // Allocate device memory
   T*   vals_d;

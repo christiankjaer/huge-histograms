@@ -15,12 +15,12 @@ void arr2HistIdxSeq(float* input_arr, int* hist_inds,
   }
 }
 
-template<class T>
-T maximumElementSeq(T* array, arr_size){
-  T my_max = array[0];
+float maximumElementSeq(float* array, int arr_size){
+  float my_max = array[0];
   for (int i = 1; i < arr_size; i++){
     my_max = max (my_max, array[i]);
   }
+  return my_max;
 }
 
 
