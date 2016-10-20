@@ -1,6 +1,5 @@
 #ifndef HOST_HIST
 #define HOST_HIST
-#define GPU_HISTOGRAM_SIZE 8192
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -8,7 +7,7 @@
 #include <math.h>
 #include <cub/cub.cuh>
 #include "Kernels.cu.h"
-
+#include "setup.cu.h"
 
 // A function which performs addition,
 template<class T>
@@ -28,12 +27,9 @@ void histIndex (unsigned int      d_size,
                 T*                  d_in,
                 T*                 d_out) {
   int num_blocks = ceil(d_size / block_size);
-
-  mapIndKernel<T>
-    <<<num_blocks, block_size>>>(d_size, d_hist_size, boundary, d_in, d_out);
 }
 
-void radix_sort(int* array_to_be_sorted,
+void radixSort(int* array_to_be_sorted,
                 int  array_length){
 
   // Allocate device memory
@@ -44,8 +40,9 @@ void radix_sort(int* array_to_be_sorted,
   cudaMemcpy(d_keys_in, array_to_be_sorted, sizeof(int)*array_length,
              cudaMemcpyHostToDevice);
 
-  int    begin_bit = ceil(log2((float)GPU_HISTOGRAM_SIZE));
-  int    end_bit   = sizeof(int)*8; // TODO, write a more intelligent version
+  // TODO : (write this more intelligently)
+  int    begin_bit = ceil(log2((float)CHUNCK_SIZE));
+  int    end_bit   = sizeof(int)*RADIX_END_BIT;
 
   void   *d_temp_storage    = NULL;
   size_t temp_storage_bytes = 0;
