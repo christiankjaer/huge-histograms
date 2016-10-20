@@ -10,7 +10,7 @@
 //            size_hist -> the histogram size
 void arr2HistIdxSeq(float* input_arr, int* hist_inds,
                     int size_arr, float max_input) {
-  for (int i=0; i<size_arr; i++) {
+  for (int i=0; i < size_arr; i++) {
     hist_inds[i] = (int)((input_arr[i]/max_input)*(float)HISTOGRAM_SIZE);
   }
 }

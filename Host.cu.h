@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <cub/cub.cuh>
+#include "../cub/cub.cuh"
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
@@ -67,12 +67,11 @@ void radixSort(int* array_to_be_sorted,
   cudaMemcpy(d_keys_in, array_to_be_sorted, sizeof(int)*array_length,
              cudaMemcpyHostToDevice);
 
-  // TODO : (write this more intelligently)
-  int    begin_bit = ceil(log2((float)CHUNCK_SIZE));
-  int    end_bit   = sizeof(int)*RADIX_END_BIT;
-
   void   *d_temp_storage    = NULL;
   size_t temp_storage_bytes = 0;
+
+  int begin_bit =                     ceil(log2((float) CHUNK_SIZE));
+  int end_bit   = max(begin_bit, (int)ceil(log2((float) HISTOGRAM_SIZE)));
 
   // Figure out how much tempoary storage is needed
   cub::DeviceRadixSort::SortKeys(d_temp_storage,
