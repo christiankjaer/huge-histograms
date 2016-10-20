@@ -9,17 +9,17 @@
 //            size_arr  -> input array size
 //            size_hist -> the histogram size
 void arr2HistIdxSeq(float* input_arr, int* hist_inds,
-                    int size_arr, int size_hist,float max_input) {
+                    int size_arr, float max_input) {
   for (int i=0; i<size_arr; i++) {
-    hist_inds[i] = (int)((input_arr[i]/max_input)*(float)size_hist);
+    hist_inds[i] = (int)((input_arr[i]/max_input)*(float)HISTOGRAM_SIZE);
   }
 }
 
 
 // @summary : fills an array with random floats
-void randArrSeq(float* array, int array_length){
+void randArrSeq(float* array, int array_length, float max_rand_num){
   for (int i = 0; i < array_length; i++){
-    array[i] = (float)(rand() % (int)MAX_RAND_NUM);
+    array[i] = (float)(rand() % (int)max_rand_num);
   }
 }
 
@@ -83,6 +83,5 @@ void printFloatArraySeq(float* array, int array_length){
   }
   printf("].\n");
 }
-
 
 #endif //ARRAY_LIB

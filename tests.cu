@@ -24,8 +24,9 @@ void update(){
 }
 
 // @summary : You know what this does {~_^}
-void myAssert(bool test){
+bool myAssert(bool test){
   result = result && test;
+  return result;
 }
 
 // @test : asserts the inds array has been partially sorted.
@@ -37,7 +38,7 @@ void sortTest0(int* inds, int data_size){
       _min += CHUNCK_SIZE;
       _max += CHUNCK_SIZE;
     }
-    myAssert(_min <= inds[i] && inds[i] < _max);
+   if (!myAssert(_min <= inds[i] && inds[i] < _max)) return;
   }
 }
 
@@ -45,18 +46,19 @@ void sortTest0(int* inds, int data_size){
 int main (int args, char** argv){
 
   printf("TESTING RADIX SORT\n");
-  int    data_size = 1024*32;
-  int    hist_size = 1024*8;
+  int    data_size    = 1024*32;
+  float  max_rand_num = 30000.0;
   float* data = (float*)malloc(data_size * sizeof(float));
   int*   inds = (int*)malloc(data_size * sizeof(int));
-  randArrSeq(data, data_size);
-  arr2HistIdxSeq(data, inds, data_size, hist_size, MAX_RAND_NUM);
+  randArrSeq(data, data_size, max_rand_num);
+  arr2HistIdxSeq(data, inds, data_size, max_rand_num);
   radixSort(inds, data_size);
   sortTest0(inds, data_size);
   update();
   free(data);
   free(inds);
   printf("\n");
+
 
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;

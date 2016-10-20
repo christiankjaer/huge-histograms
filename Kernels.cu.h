@@ -1,17 +1,15 @@
 #ifndef KERNELS_HIST
 #define KERNELS_HIST
-
-#define GPU_HIST_SIZE 8192
+#include "setup.cu.h"
 
 template <class T>
-__global__ void mapIndKernel(unsigned int  tot_size,
-                       unsigned int hist_size,
-                       T             boundary,
-                       T*                d_in,
-                       int*             d_out){
+__global__ void histIndKernel(float* input_arr_d,
+                             int*   hist_inds_d,
+                             int    size_arr,
+                             float  max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid < tot_size) {
-    d_out[gid] = (int)(d_in[gid]/boundary * (float)hist_size);
+  if (gid < size_arr){
+    hist_inds_d[gid] = (int)((input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
   }
 }
 
@@ -19,12 +17,12 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
                                 int*              inds,
                                 int*              hist) {
 
-  __shared__ int Hsh[GPU_HIST_SIZE];
+  __shared__ int Hsh[CHUNCK_SIZE];
 
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   const unsigned int bdx = blockDim.x;
-  const unsigned int hist_elems = GPU_HIST_SIZE / bdx;
+  const unsigned int hist_elems = CHUNCK_SIZE / bdx;
   const unsigned int tot_elems = tot_size / bdx;
 
   if (gid < tot_size) {
