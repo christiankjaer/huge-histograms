@@ -42,31 +42,56 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 
 }
 
+/* All of the index calculations are probably wrong
+ *
+ * The sgmts array is an array of indices where the
+ * segments start like
+ * [0,501,2057,...] 
+ */
 __global__ void segmentedHistKernel(unsigned int tot_size,
                                     unsigned int num_sgm,
                                     int *sgmts,
                                     int *inds,
                                     int *hist) {
 
-  __shared__ int Hsh[GPU_HIST_SIZE];
+  __shared__ int Hsh[CHUNK_SIZE];
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int bid = blockIdx.x * blockDim.x // Start of the current block.
+  const unsigned int bdx = blockDim.x;
+  const unsigned int thread_elems = CHUNK_SIZE / bdx;
 
-  while (/* */) {
+  // Figure out which segment the current block starts in.
 
-    if (/* gid in working set */) {
+  int curr_segment = 0;
+  while (sgmts[curr_segment] < bid) {
+    curr_segment++;
+  }
+
+  int start_segm = sgmts[curr_segment];
+  int end_segm = sgmts[curr_segment+1];
+
+  /* While one of the gid's is in the current segment */
+  while (/* Somethings goes here */) {
+
+    if (gid >= start_segm && gid < end_segm) {
       // write into shared histogram
       // using atomicAdd()
+      atomicAdd(&Hsh[inds[gid] - start_segm], 1);
     }
 
     __syncthreads();
-    // Write shared histogram to global histogram
+    // Copy the elements back to global memory
+    for (int i = 0; i < thread_elems; i++) {
+      hist[i * bdx + gid] = /* Something here as well */
+    }
 
     __syncthreads();
+
+    curr_segment++;
+    start_segm = sgmts[curr_segment];
+    end_segm = sgmts[curr_segment+1];
   }
-
-
-
 }
 
 // In the case of segments
