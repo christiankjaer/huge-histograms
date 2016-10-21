@@ -121,4 +121,3 @@ void naiveHist(T*      h_array,
 }
 
 #endif //HOST_HIST
-

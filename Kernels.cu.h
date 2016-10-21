@@ -48,7 +48,7 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 
 
 /* Global segment counter, initilize before running segmentedHistKernel */
-__device__ segmentCounter;
+/* __device__ segmentCounter; */
 
 /* All of the index calculations are probably wrong
  *
@@ -69,14 +69,13 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
   const unsigned int bst = blockIdx.x * blockDim.x; // Start of the current block.
   const unsigned int bdx = blockDim.x;
   const unsigned int thread_elems = CHUNK_SIZE / bdx;
-  const unsigned int curr_segment = 0;
   // First and last element of segment inside block
   int start_segm;
 
   // Figure out which segment the current block starts in.
 
   // dummy segment counter
-  // int curr_segment = 0;
+  int curr_segment = 0;
   if (threadIdx.x == 0) {
     while (sgmts[curr_segment] <= bst) {
       curr_segment++;
@@ -86,9 +85,9 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
   }
   __syncthreads();
 
-
+  int end_segm = sgmts[curr_segment+1];
   /* While one of the gid's is in the current segment */
-  while (/* Somethings goes here */) {
+  while (true/* Somethings goes here */) {
 
     if (gid >= start_segm && gid < end_segm) {
       // write into shared histogram
@@ -123,6 +122,7 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 //   commit to memory
 
 
+
 // @summary: for each block, it finds respective segment which it belongs to
 
 __global__ void blockSgmKernel(unsigned int block_size,
@@ -144,6 +144,43 @@ __global__ void blockSgmKernel(unsigned int block_size,
      }
      block_sgm[gid] = j;
    }
+}
+
+__global__ void hennesHistKernel(unsigned int tot_size,
+                                 unsigned int num_chunks,
+                                 unsigned int num_sgms,
+                                 unsigned int *sgm_id_arr,
+                                 unsigned int *sgm_offset_arr,
+                                 unsigned int *inds_arr,
+                                 unsigned int *hist_arr) {
+
+  __shared__ int Hsh[CHUNK_SIZE];
+
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int bid = blockIdx.x * blockDim.x; // Start of the current block.
+  const unsigned int bdx = blockDim.x;
+  const unsigned int thread_elems = CHUNK_SIZE / bdx;
+  
+  
+  // Get segment ID and offset
+  const unsigned int sgm_id = sgm_id_arr[bdx];
+  const unsigned int sgm_start = sgm_offset_arr[sgm_id];
+
+  // Get last segment element idx
+  const unsigned int sgm_end;
+  if (sgm_id != num_sgms-1) sgm_end = sgm_offset_arr[sgm_id+1]-1;
+  else sgm_end = tot_size-1;
+  
+  // Check for possible conflict
+  bool conflict = false;
+  if (sgm_end <= bid+bdx) conflict = true;
+
+  // Essential kernel body:
+  if (conflict) {
+    // TODO ... handle segment split
+  } else {
+    
+  }
 }
 
 
