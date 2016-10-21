@@ -62,7 +62,7 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
   __shared__ int Hsh[CHUNK_SIZE];
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  const unsigned int bid = blockIdx.x * blockDim.x // Start of the current block.
+  const unsigned int bid = blockIdx.x * blockDim.x; // Start of the current block.
   const unsigned int bdx = blockDim.x;
   const unsigned int thread_elems = CHUNK_SIZE / bdx;
 
@@ -77,7 +77,7 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
   int end_segm = sgmts[curr_segment+1];
 
   /* While one of the gid's is in the current segment */
-  while (/* Somethings goes here */) {
+  while (true/* Somethings goes here */) {
 
     if (gid >= start_segm && gid < end_segm) {
       // write into shared histogram
@@ -88,7 +88,7 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
     __syncthreads();
     // Copy the elements back to global memory
     for (int i = 0; i < thread_elems; i++) {
-      hist[i * bdx + gid] = /* Something here as well */
+      hist[i * bdx + gid] = 1 ;/* Something here as well */
     }
 
     __syncthreads();
