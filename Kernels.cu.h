@@ -111,40 +111,72 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 
 __global__ void hennesHistKernel(unsigned int tot_size,
 				 unsigned int num_chunks,
-				 unsgined int num_sgms,
-				 unsgined int *sgm_id_arr,
+				 unsigned int num_sgms,
+				 unsigned int *sgm_id_arr,
 				 unsigned int *sgm_offset_arr,
 				 unsigned int *inds_arr,
 				 unsigned int *hist_arr) {
 
   __shared__ int Hsh[CHUNK_SIZE];
 
-  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  const unsigned int bid = blockIdx.x * blockDim.x; // Start of the current block.
-  const unsigned int bdx = blockDim.x;
-  const unsigned int thread_elems = CHUNK_SIZE / bdx;
+  // LARGEST TODO: I think gid should be multiplied or something by the stride 
   
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  // TODO: set if-statement to skip if gid (times thead_elems?) larger than tot_size..
+  const unsigned int tid = blockIdx.x;
+  const unsigned int bdx = blockDim.x;
+  const unsigned int bid = tid * bdx; // Start of the current block.
+  const unsigned int bnd = bid+bdx; // End of current block
+  // TODO: consider verifying if below includes all elements in chunk (by ceil)..
+  const unsigned int thread_elems = ceil( (float)CHUNK_SIZE / bdx);
+  const unsigned int stride = ceil( (float)CHUNK_SIZE / thread_elems);
   
   // Get segment ID and offset
-  const unsigned int sgm_id = sgm_id_arr[bdx];
-  const unsigned int sgm_start = sgm_offset_arr[sgm_id];
-
+  unsigned int sgm_id = sgm_id_arr[bdx];
+  unsigned int sgm_start = sgm_offset_arr[sgm_id];
   // Get last segment element idx
-  const unsigned int sgm_end;
-  if (sgm_id != num_sgms-1) sgm_end = sgm_offset_arr[sgm_id+1]-1;
-  else sgm_end = tot_size-1;
+  unsigned int sgm_end;
+  if (sgm_id != num_sgms-1)
+    sgm_end = sgm_offset_arr[sgm_id+1]-1;
+  else
+    sgm_end = tot_size-1;
   
   // Check for possible conflict
   bool conflict = false;
-  if (sgm_end <= bid+bdx) conflict = true;
+  if (sgm_end < bnd) // TODO: verify this equality not off by one or something..
+    conflict = true;
 
   // Essential kernel body:
-  if (conflict) {
-    // TODO ... handle segment split
-  } else {
-    
+  unsigned int elem;
+  if (conflict) {             /* If conflicts, handle segment splits within block */
+    while (smg_end < bnd) {
+      // TODO ... handle segment split
+      
+      // Update start/end of segment
+      sgm_id++;
+      sgm_start = sgm_end;
+      if (sgm_id != num_sgms-1)
+	sgm_end = sgm_offset_arr[sgm_id+1]-1;
+      else
+	sgm_end = tot_size-1;
+    }
+  } else {                        /* If no conflict solve for trivial case */
+    for (int i=0;i<num_threads;i++) {
+      // Jump in strides
+      elem = tid + i*stride; // current local hist element
+      if ((elem+gid < tot_size) && (elem<CHUNK_SIZE))	
+	atomicAdd(&Hsh[inds[elem]], 1); // Add to local shared histogram
+      else
+	break; // no need to do more strides
+    }
   }
   
+  __syncthreads();
+  if (!conflict)
+    for (int i=0;i<num_threads;i++) {
+      elem = tid + i*stride; // current local hist element
+      hist[elem + sgm_id*CHUNK_SIZE] = Hsh[elem]; // add to global hist
+    }
   
 }
 
