@@ -71,15 +71,23 @@ int main (int args, char** argv){
   float* data         = (float*)malloc(data_size * sizeof(float));
   int*   inds_seq     = (int*)malloc(data_size * sizeof(int));
   int*   inds_par     = (int*)malloc(data_size * sizeof(int));
+
+  // Random array construction
   randArrSeq(data, data_size, max_rand_num);
+
+  // Sequential histogram indexing and sorting test
   arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num);
   radixSort(inds_seq, data_size);
   sortTest(inds_seq, data_size);
   update();
+  
+  // Tests if parallel historgam indexing are sorted correctly.
   histVals2Index<float>(data_size, max_rand_num, data, inds_par);
   radixSort(inds_par, data_size);
   sortTest(inds_par, data_size);
   update();
+
+  // Tests if parallel and sequential are sorted the same.
   compareTest<int>(inds_par, inds_seq, data_size);
   update();
   free(data);

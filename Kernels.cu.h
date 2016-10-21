@@ -44,4 +44,6 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 
 }
 
+
+
 #endif //KERNELS_HIST

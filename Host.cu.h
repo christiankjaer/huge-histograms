@@ -73,8 +73,8 @@ void radixSort(int* array_to_be_sorted,
 
   // TODO : Figure out an intelligent way of computing end bit [-.-]
   int begin_bit = ceil(log2((float) CHUNK_SIZE));
-  int end_bit   = sizeof(int)*8;
-  /* int end_bit   = max(begin_bit, (int)ceil(log2((float) HISTOGRAM_SIZE))); */
+  /* int end_bit   = sizeof(int)*8; */
+  int end_bit   = max(begin_bit, (int)ceil(log2((float) HISTOGRAM_SIZE))) + 1;
 
   // Figure out how much tempoary storage is needed
   cub::DeviceRadixSort::SortKeys(d_temp_storage,
@@ -103,6 +103,21 @@ void radixSort(int* array_to_be_sorted,
   cudaFree(d_keys_in);
   cudaFree(d_keys_out);
   cudaFree(d_temp_storage);
+}
+
+// @summary: Constructs a histogram
+template <class T>
+void naiveHist(T*      h_array,
+               int*     h_hist,
+               int data_length) {
+  
+  // histogram index array
+  int* d_inds;
+  cudaMalloc(&d_inds, sizeof(int) * data_length);
+
+  // Finds maximum element
+  // int max_elem = 10000;
+  
 }
 
 #endif //HOST_HIST
