@@ -109,4 +109,44 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 //   commit to memory
 
 
+__global__ void hennesHistKernel(unsigned int tot_size,
+				 unsigned int num_chunks,
+				 unsgined int num_sgms,
+				 unsgined int *sgm_id_arr,
+				 unsigned int *sgm_offset_arr,
+				 unsigned int *inds_arr,
+				 unsigned int *hist_arr) {
+
+  __shared__ int Hsh[CHUNK_SIZE];
+
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int bid = blockIdx.x * blockDim.x; // Start of the current block.
+  const unsigned int bdx = blockDim.x;
+  const unsigned int thread_elems = CHUNK_SIZE / bdx;
+  
+  
+  // Get segment ID and offset
+  const unsigned int sgm_id = sgm_id_arr[bdx];
+  const unsigned int sgm_start = sgm_offset_arr[sgm_id];
+
+  // Get last segment element idx
+  const unsigned int sgm_end;
+  if (sgm_id != num_sgms-1) sgm_end = sgm_offset_arr[sgm_id+1]-1;
+  else sgm_end = tot_size-1;
+  
+  // Check for possible conflict
+  bool conflict = false;
+  if (sgm_end <= bid+bdx) conflict = true;
+
+  // Essential kernel body:
+  if (conflict) {
+    // TODO ... handle segment split
+  } else {
+    
+  }
+  
+  
+}
+
+
 #endif //KERNELS_HIST
