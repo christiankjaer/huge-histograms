@@ -68,19 +68,22 @@ int main (int args, char** argv){
   printf("TESTING RADIX SORT\n");
 
   // declare initial values
-  int    data_size     = 1024*32;
+  int    data_size     = 1024*16;
   float  max_rand_num1 = 30000.0;
   float  max_rand_num2 = 0.0;
   float* data          = (float*)malloc(data_size * sizeof(float));
+  float* data_d;
   int*   inds_seq      = (int*)malloc(data_size * sizeof(int));
   int*   inds_par      = (int*)malloc(data_size * sizeof(int));
 
   // fill the data array with random values
   randArrSeq(data, data_size, max_rand_num1);
 
-  // check that the maximum number scan succeded.
+  // check that the maximum number was found correctly
+  cudaMalloc((void**)&data_d, data_size * sizeof(float));
+  cudaMemcpy(data_d, data, data_size * sizeof(float), cudaMemcpyHostToDevice);
   max_rand_num1 = maximumElementSeq(data, data_size);
-  max_rand_num2 = maximumElement<float>(data, data_size);
+  max_rand_num2 = maximumElement<float>(data_d, data_size);
   myAssert(max_rand_num1 == max_rand_num2);
   update();
 
@@ -104,10 +107,48 @@ int main (int args, char** argv){
 
   // clean up memory
   free(data);
+  cudaFree(data_d);
   free(inds_seq);
   free(inds_par);
   printf("\n");
 
+  printf("TESTING PREFIX SUM EXCLUSIVE\n");
+
+  // declare initial values
+  max_rand_num1  = 100.0;
+  data           = (float*)malloc(data_size * sizeof(float));
+  float  epsilon = 0.001;
+  float* data_out;
+  float* prefix_sum_seq = (float*)malloc(data_size * sizeof(float));
+  float* prefix_sum_par = (float*)malloc(data_size * sizeof(float));
+
+  // fill the data array with random values
+  randArrSeq(data, data_size, max_rand_num1);
+
+  // copy values to device
+  cudaMalloc((void**)&data_d, data_size * sizeof(float));
+  cudaMalloc((void**)&data_out, data_size * sizeof(float));
+  cudaMemcpy(data_d, data, data_size * sizeof(float), cudaMemcpyHostToDevice);
+
+  // compute the two prefix sum exclusives.
+  prefixSumExc(data_size, data_d, data_out);
+  scanExcPlusSeq(data, prefix_sum_seq, data_size);
+
+  // copy back the result from device
+  cudaMemcpy(prefix_sum_par, data_out, data_size * sizeof(float),
+             cudaMemcpyDeviceToHost);
+
+  // check that the resulting arrays differ with at most epsilon.
+  compareTestEps<float>(prefix_sum_par, prefix_sum_seq, data_size, epsilon);
+  update();
+
+  // clean up memory
+  cudaFree(data_d);
+  cudaFree(data_out);
+  free(data);
+  free(prefix_sum_par);
+  free(prefix_sum_seq);
+  printf("\n");
 
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;

@@ -39,13 +39,10 @@ void zeroArrSeq(float* array, int array_length){
 }
 
 // @summary : a sequential implementation of scanExc (+)
-void scanExcSeq(float* array, int array_length){
+void scanExcPlusSeq(float* array, float* out, int array_length){
+  out[0] = 0.0;
   for (int i = 1; i < array_length; i++){
-    array[i] = array[i-1];
-  }
-  array[0] = 0;
-  for (int i = 1; i < array_length; i++){
-    array[i] = array[i-1] + array[i];
+    out[i] = out[i-1] + array[i-1];
   }
 }
 

@@ -9,105 +9,57 @@
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
-// @class : The addition function, where e = 0 and apply(t1, t2) = t1 + t2
 template<class T>
-class Addition {
- public:
-  typedef T BaseType;
-  static __device__ __host__ inline T identity()                    { return (T)0;    }
-  static __device__ __host__ inline T apply(const T t1, const T t2) { return t1 + t2; }
-};
+void prefixSumExc(unsigned long arr_size,
+                  T*            d_in,
+                  T*            d_out) {
 
-// @class   : The addition function, where e = 0 and apply(t1, t2) = max(t1, t2)
-// @remarks : The neutral element e = 0 comes from the assertion that
-//            all values in the image are non-negative
-template<class T>
-class Maximum {
- public:
-  typedef T BaseType;
-  static __device__ __host__ inline T identity() { return (T)0; }
-  static __device__ __host__ inline T apply(const T t1, const T t2)
-  { return max(t1, t2); }
-};
+  // Determine temporary device storage requirements
+  void     *d_temp_storage = NULL;
+  size_t   temp_storage_bytes = 0;
 
-template<class OP, class T>
-void scanInc(unsigned long arr_size,
-             T*            arr_in,
-             T*            arr_out) {
+  cub::DeviceScan::ExclusiveSum(d_temp_storage,
+                                temp_storage_bytes,
+                                d_in,
+                                d_out,
+                                arr_size);
 
-  unsigned int num_blocks  = ceil(arr_size / (float)CUDA_BLOCK_SIZE);
-  unsigned int sh_mem_size = CUDA_BLOCK_SIZE * 32; // or just all of it !
+  // Allocate temporary storage
+  cudaMalloc(&d_temp_storage, temp_storage_bytes);
 
-  T* d_in;
-  T* d_out;
-  cudaMalloc((void**)&d_in,  arr_size * sizeof(T));
-  cudaMalloc((void**)&d_out, arr_size * sizeof(T));
-  cudaMemcpy(d_in, arr_in, arr_size * sizeof(T), cudaMemcpyHostToDevice);
-
-  scanIncKernel<OP,T><<< num_blocks, CUDA_BLOCK_SIZE, sh_mem_size >>>
-    (d_in, d_out, arr_size);
-  cudaThreadSynchronize();
-
-  // BASE CASE :
-  // The reduction could fit into one cuda block, and we are done.
-
-  if (CUDA_BLOCK_SIZE >= arr_size) {
-    cudaMemcpy(arr_out, d_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
-    cudaFree(d_in);
-    cudaFree(d_out);
-    return;
-  }
-
-  // RECURSIVE CASE:
-  // we copy the end of each CUDA_BLOCK_SIZE blocks, and scan again !
-
-  // Allocate new device input & output array of size num_blocks
-  T* d_rec_in;
-  T* d_rec_out;
-  cudaMalloc((void**)&d_rec_in , num_blocks*sizeof(T));
-  cudaMalloc((void**)&d_rec_out, num_blocks*sizeof(T));
-
-  unsigned int num_blocks_rec = ceil(num_blocks / (float)CUDA_BLOCK_SIZE);
-
-  // Copy in the end-of-block results of the previous scan
-  copyEndOfBlockKernel<T><<< num_blocks_rec, CUDA_BLOCK_SIZE >>>
-    (d_out, d_rec_in, num_blocks);
-  cudaThreadSynchronize();
-
-  // Scan recursively the last elements of each CUDA block
-  scanInc<OP, T>(num_blocks, d_rec_in, d_rec_out);
-
-  // Distribute the the corresponding element of the
-  // recursively scanned data to all elements of the
-  // corresponding original block
-  distributeEndBlock<OP, T><<< num_blocks, CUDA_BLOCK_SIZE >>>
-    (d_rec_out, d_out, arr_size);
-  cudaThreadSynchronize();
-
-  // Copy back the result of the scan
-  cudaMemcpy(arr_out, d_out, arr_size * sizeof(T), cudaMemcpyDeviceToHost);
-
-  // Clean up memory.
-  cudaFree(d_in);
-  cudaFree(d_out);
-  cudaFree(d_rec_in );
-  cudaFree(d_rec_out);
+  // Run exclusive prefix sum
+  cub::DeviceScan::ExclusiveSum(d_temp_storage,
+                                temp_storage_bytes,
+                                d_in,
+                                d_out,
+                                arr_size);
 }
 
 // @summary : computes the maximum value in an array of values of type T.
 template<class T>
-T maximumElement(T* arr, int arr_size){
+T maximumElement(T* d_in, int arr_size){
 
-  // Scan with the maximum class.
-  T* output = (T*)malloc(arr_size * sizeof(T));
-  scanInc<Maximum<float>, float>(arr_size, arr, output);
+  // Determine temporary device storage requirements
+  T* d_max;
+  T  h_max;
+  cudaMalloc((void**)&d_max, sizeof(T));
+  void*    d_temp_storage     = NULL;
+  size_t   temp_storage_bytes = 0;
 
-  // Pick the last element
-  T  result = output[arr_size-1];
+  // Dummy call, to set temp_storage values.
+  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size);
+  cudaMalloc(&d_temp_storage, temp_storage_bytes);
+
+  // Let Cub handle the reduction
+  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size);
+
+  // Copy back the reduced element
+  cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost);
 
   // Clean up memory
-  free(output);
-  return result;
+  cudaFree(d_temp_storage);
+  cudaFree(d_max);
+  return h_max;
 }
 
 // @summary : Normalizes the dateset, and computes histogram indexes.
@@ -122,9 +74,6 @@ void histVals2Index (unsigned int    arr_size,
                      T*                vals_h,
                      int*              inds_h){
 
-  int num_blocks = ceil(arr_size / CUDA_BLOCK_SIZE);
-  T boundary = maximumElement<T>(vals_h, arr_size);
-
   // Allocate device memory
   T*   vals_d;
   int* inds_d;
@@ -132,7 +81,11 @@ void histVals2Index (unsigned int    arr_size,
   cudaMalloc((void**)&inds_d, arr_size * sizeof(int));
   cudaMemcpy(vals_d, vals_h, arr_size*sizeof(T), cudaMemcpyHostToDevice);
 
-  // TODO : handle {arr_size > sizeof(shared_memory)} !
+  //  Figure out the boundaries (vague).
+  int num_blocks = ceil(arr_size / CUDA_BLOCK_SIZE);
+  T   boundary   = maximumElement<T>(vals_d, arr_size);
+
+  // TODO : handle {arr_size > sizeof(shared_memory)} !?
 
   // Run indexing kernel
   histVals2IndexKernel<T><<<num_blocks, CUDA_BLOCK_SIZE>>>
