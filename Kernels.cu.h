@@ -207,8 +207,9 @@ __global__ void hennesHistKernel(unsigned int tot_size,
 	break; // no need to do more strides
     }
   }
-  
+
   __syncthreads();
+  // Only relevant for trivial case
   if (!conflict)
     for (int i=0;i<num_threads;i++) {
       elem = tid + i*stride; // current local hist element
