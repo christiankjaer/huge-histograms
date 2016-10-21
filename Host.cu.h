@@ -120,4 +120,21 @@ void naiveHist(T*      h_array,
   
 }
 
+// @summary: finds index for segment offset, for each block
+
+void blockSgm (unsigned int block_size,
+               unsigned int   tot_size,
+               int*         sgm_offset,
+               int*          block_sgm){
+  int blocks     = ceil(tot_size/block_size); // Total number of blocks for image with size N
+  int num_blocks = ceil(  blocks/block_size); // Number of blocks to compute segment block
+
+  blockSgmKernel<<<num_blocks, block_size>>>(block_size,
+                                             blocks,
+                                             sgm_offset,
+                                             block_sgm);
+  cudaThreadSynchronize;
+
+}
+
 #endif //HOST_HIST
