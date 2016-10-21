@@ -9,6 +9,7 @@
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
+// @summary : d_out = scan_exc (+) 0 d_in.
 template<class T>
 void prefixSumExc(unsigned long arr_size,
                   T*            d_in,
