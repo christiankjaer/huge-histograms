@@ -47,12 +47,16 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 }
 
 
+/* Global segment counter, initilize before running segmentedHistKernel */
+__device__ segmentCounter;
+
 /* All of the index calculations are probably wrong
  *
  * The sgmts array is an array of indices where the
  * segments start like
  * [0,501,2057,...] 
  */
+
 __global__ void segmentedHistKernel(unsigned int tot_size,
                                     unsigned int num_sgm,
                                     int *sgmts,
@@ -60,24 +64,31 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
                                     int *hist) {
 
   __shared__ int Hsh[CHUNK_SIZE];
-
+  
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  const unsigned int bid = blockIdx.x * blockDim.x; // Start of the current block.
+  const unsigned int bst = blockIdx.x * blockDim.x; // Start of the current block.
   const unsigned int bdx = blockDim.x;
   const unsigned int thread_elems = CHUNK_SIZE / bdx;
+  const unsigned int curr_segment = 0;
+  // First and last element of segment inside block
+  int start_segm;
 
   // Figure out which segment the current block starts in.
 
-  int curr_segment = 0;
-  while (sgmts[curr_segment] < bid) {
-    curr_segment++;
+  // dummy segment counter
+  // int curr_segment = 0;
+  if (threadIdx.x == 0) {
+    while (sgmts[curr_segment] <= bst) {
+      curr_segment++;
+      //int current_val = atomicAdd(&segmentCounter, 1);
+    }
+    start_segm = sgmts[curr_segment];
   }
+  __syncthreads();
 
-  int start_segm = sgmts[curr_segment];
-  int end_segm = sgmts[curr_segment+1];
 
   /* While one of the gid's is in the current segment */
-  while (true/* Somethings goes here */) {
+  while (/* Somethings goes here */) {
 
     if (gid >= start_segm && gid < end_segm) {
       // write into shared histogram
@@ -93,6 +104,9 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 
     __syncthreads();
 
+    /* if (sgmts[segmentCounter] - 1 == bst) { */
+      
+    /* } */
     curr_segment++;
     start_segm = sgmts[curr_segment];
     end_segm = sgmts[curr_segment+1];
@@ -107,6 +121,30 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 //   __syncthreads()
 //   segment++
 //   commit to memory
+
+
+// @summary: for each block, it finds respective segment which it belongs to
+
+__global__ void blockSgmKernel(unsigned int block_size,
+                               unsigned int num_blocks,       
+                               int*         sgm_offset,
+                               int*          block_sgm){
+
+   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+   /* block_sgm = [0, 0, 0, ...] */
+   /* sgm_offset = [0, 37 , 1000, 201020, ...] */
+
+   if (gid < num_blocks){
+     //forall (int i = 0; i < num_blocks; i++) {
+     int tmp = gid * block_size;
+     int j = 0;
+     while (sgm_offset[j] >= tmp){
+       j++;
+     }
+     block_sgm[gid] = j;
+   }
+}
 
 
 #endif //KERNELS_HIST
