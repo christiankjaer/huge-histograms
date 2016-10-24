@@ -191,8 +191,10 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   unsigned int local_elem;
   unsigned int global_elem;
   if (conflict) {
+    // For each possible segment within the chunk..
     while (smg_end < bnd) {
-      // TODO ... handle segment split
+      // TODO: Following is not thaaaaat smart..
+      // Process segment in strides
       for (int i=0;i<num_threads;i++) {
 	local_elem = lidx + i*stride; // current local hist element
 	global_elem = gidx + i*stride;
@@ -201,9 +203,14 @@ __global__ void hennesHistKernel(unsigned int tot_size,
 	  if ((global_elem>=sgm_start) && (global_elem<sgm_end))
 	    atomicAdd(&Hsh[inds[local_elem]], 1); // Add to local shared histogram
 	}
-	__syncthreads();
-	
       }
+      __syncthreads();
+      // TODO: THIS PART NOT DONE / CORRECTLY INDEXED
+      for (int i=0;i<num_threads;i++) {
+	elem = tid + i*stride; // current local hist element
+	hist[elem + sgm_id*CHUNK_SIZE] = Hsh[elem]; // add to global hist
+      }
+      
       // Update start/end of segment
       sgm_id++;
       sgm_start = sgm_end;
@@ -230,6 +237,7 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   __syncthreads();
   // Only relevant for trivial case
   if (!conflict)
+    // TODO: THIS PART NOT DONE / CORRECTLY INDEXED
     for (int i=0;i<num_threads;i++) {
       elem = tid + i*stride; // current local hist element
       hist[elem + sgm_id*CHUNK_SIZE] = Hsh[elem]; // add to global hist
