@@ -132,7 +132,7 @@ __global__ void blockSgmKernel(unsigned int block_size,
 
    const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
 
-   /* block_sgm = [0, 0, 0, ...] */
+   /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
    /* sgm_offset = [0, 37 , 1000, 201020, ...] */
 
    if (gid < num_blocks){
@@ -248,8 +248,8 @@ __global__ void hennesHistKernel(unsigned int tot_size,
       local_elem = lidx + i*stride;
       global_elem = gidx + i*stride;
       if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-	0;
-	//atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
+        0;
+        //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
       }
     }
   
