@@ -162,14 +162,13 @@ __global__ void christiansHistKernel(unsigned int tot_size,
   __shared__ int Hsh[GPU_HIST_SIZE];
 
   
-  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
-  const unsigned sh_workload = GPU_HIST_SIZE / blockDim.x;
   
   unsigned int curr_sgm = sgm_idx[blockIdx.x];
 
   unsigned int sgm_start = sgm_offset[curr_sgm];
-  unsigned int sgm_end = sgm_offset[curr_sgm + 1];
+  unsigned int sgm_end = (curr_sgm >= num_sgms - 1) ? sgm_offset[curr_sgm + 1] : tot_size;
 
 
   while (sgm_start < block_end) {
@@ -197,7 +196,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 
     curr_sgm++;
     sgm_start = sgm_offset[curr_sgm];
-    sgm_end = sgm_offset[curr_sgm + 1];
+    sgm_end = (curr_sgm >= num_sgms - 1) ? sgm_offset[curr_sgm + 1] : tot_size;
   }
 
 }
