@@ -223,8 +223,8 @@ __global__ void hennesHistKernel(unsigned int tot_size,
         global_elem = gidx + i*stride;
         if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
           if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-            //break;
-            atomicAdd(&hist_arr[global_elem], Hsh[local_elem]);
+            break;
+            //atomicAdd(&hist_arr[global_elem], Hsh[local_elem]);
         }
       }
 
@@ -266,8 +266,8 @@ __global__ void hennesHistKernel(unsigned int tot_size,
       //local_elem = lidx + i;
       global_elem = gidx + i; // global histogram index
       if ((global_elem < tot_size) && (i<CHUNK_SIZE)) {
-        //break;
-        atomicAdd(&hist[global_elem], Hsh[i]); // flushes local histogram to global histogram
+        break;
+        //atomicAdd(&hist[global_elem], Hsh[i]); // flushes local histogram to global histogram
       }
     }
 }
