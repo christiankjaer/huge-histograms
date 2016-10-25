@@ -15,6 +15,14 @@ void arr2HistIdxSeq(float* input_arr, int* hist_inds,
   }
 }
 
+float maximumElementSeq(float* array, int arr_size){
+  float my_max = array[0];
+  for (int i = 1; i < arr_size; i++){
+    my_max = max (my_max, array[i]);
+  }
+  return my_max;
+}
+
 
 // @summary : fills an array with random floats
 void randArrSeq(float* array, int array_length, float max_rand_num){
@@ -31,13 +39,10 @@ void zeroArrSeq(float* array, int array_length){
 }
 
 // @summary : a sequential implementation of scanExc (+)
-void scanExcSeq(float* array, int array_length){
+void scanExcPlusSeq(float* array, float* out, int array_length){
+  out[0] = 0.0;
   for (int i = 1; i < array_length; i++){
-    array[i] = array[i-1];
-  }
-  array[0] = 0;
-  for (int i = 1; i < array_length; i++){
-    array[i] = array[i-1] + array[i];
+    out[i] = out[i-1] + array[i-1];
   }
 }
 

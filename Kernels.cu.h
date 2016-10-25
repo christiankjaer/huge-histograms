@@ -2,7 +2,12 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
-// Maps array to histogram indices.
+// @summary : Computes the histogram indexes based on a normalization of the data
+// @remarks : Assumes all values in the input array to be non-negative
+// @params  : input_arr_d -> the input values
+//          : hist_inds_d -> an array to write back the histogram indexes
+//          : size_arr    -> the size of both arrays
+//          : the largest input element
 template <class T>
 __global__ void histVals2IndexKernel(float* input_arr_d,
                                      int*   hist_inds_d,
@@ -14,7 +19,7 @@ __global__ void histVals2IndexKernel(float* input_arr_d,
   }
 }
 
-
+// @remarks : needs proper documentation
 __global__ void naiveHistKernel(unsigned int  tot_size,
                                 int*              inds,
                                 int*              hist) {
@@ -54,7 +59,7 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
  *
  * The sgmts array is an array of indices where the
  * segments start like
- * [0,501,2057,...] 
+ * [0,501,2057,...]
  */
 
 __global__ void segmentedHistKernel(unsigned int tot_size,
@@ -64,7 +69,6 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
                                     int *hist) {
 
   __shared__ int Hsh[CHUNK_SIZE];
-  
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   const unsigned int bst = blockIdx.x * blockDim.x; // Start of the current block.
   const unsigned int bdx = blockDim.x;
@@ -104,7 +108,6 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
     __syncthreads();
 
     /* if (sgmts[segmentCounter] - 1 == bst) { */
-      
     /* } */
     curr_segment++;
     start_segm = sgmts[curr_segment];
@@ -126,7 +129,7 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 // @summary: for each block, it finds respective segment which it belongs to
 
 __global__ void blockSgmKernel(unsigned int block_size,
-                               unsigned int num_blocks,       
+                               unsigned int num_blocks,
                                int*         sgm_offset,
                                int*          block_sgm){
 
@@ -156,7 +159,7 @@ __global__ void hennesHistKernel(unsigned int tot_size,
 
   // Block local histogram
   __shared__ int Hsh[CHUNK_SIZE];
-  
+
   // Global idx (first position of n strides)
   const unsigned int gidx = blockIdx.x * CHUNK_SIZE + threadIdx.x;
   // Local idx  (----//----)
@@ -167,11 +170,11 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   const unsigned int bid = lidx * bdx;
   // (Global) End of current block
   const unsigned int bnd = bid+bdx;
-  
+
   // TODO: consider verifying if below includes all elements in chunk (by ceil)..
   const unsigned int thread_elems = ceil( (float)CHUNK_SIZE / bdx);
   const unsigned int stride = bdx;
-  
+
   // Get segment idx at start of block and its global offset
   unsigned int sgm_id = sgm_id_arr[bdx];
   unsigned int sgm_start = sgm_offset_arr[sgm_id];
@@ -181,7 +184,7 @@ __global__ void hennesHistKernel(unsigned int tot_size,
     sgm_end = sgm_offset_arr[sgm_id+1]-1;
   else
     sgm_end = tot_size-1;
-  
+
   // Check for possible conflict
   bool conflict = false;
   if (sgm_end < bnd) // TODO: verify this equality not off-by-1 or something..
@@ -215,7 +218,7 @@ __global__ void hennesHistKernel(unsigned int tot_size,
 	    //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
 	}
       }
-      
+
       // Update start/end of segment
       sgm_id++;
       sgm_start = sgm_end;
@@ -252,7 +255,6 @@ __global__ void hennesHistKernel(unsigned int tot_size,
 	//atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
       }
     }
-  
 }
 
 
