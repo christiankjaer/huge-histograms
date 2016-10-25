@@ -135,20 +135,20 @@ __global__ void blockSgmKernel(unsigned int block_size,
                                int*         sgm_offset,
                                int*          block_sgm){
 
-   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
 
-   /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
-   /* sgm_offset = [0, 37 , 1000, 201020, ...] */
+  /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
+  /* sgm_offset = [0, 37 , 1000, 201020, ...] */
 
-   if (gid < num_blocks){
-     //forall (int i = 0; i < num_blocks; i++) {
-     int tmp = gid * block_size;
-     int j = 0;
-     while (sgm_offset[j] >= tmp){
-       j++;
-     }
-     block_sgm[gid] = j;
-   }
+  if (gid < num_blocks){
+    //forall (int i = 0; i < num_blocks; i++) {
+    int tmp = gid * block_size;
+    int j = 0;
+    while (sgm_offset[j] >= tmp){
+      j++;
+    }
+    block_sgm[gid] = j;
+  }
 }
 
 __global__ void christiansHistKernel(unsigned int tot_size,
@@ -200,114 +200,6 @@ __global__ void christiansHistKernel(unsigned int tot_size,
     sgm_end = sgm_offset[curr_sgm + 1];
   }
 
-}
-
-__global__ void hennesHistKernel(unsigned int tot_size,
-    unsigned int num_chunks,
-    unsigned int num_sgms,
-    unsigned int *sgm_id_arr,
-    unsigned int *sgm_offset_arr,
-    unsigned int *inds_arr,
-    unsigned int *hist_arr) {
-
-  // Block local histogram
-  __shared__ int Hsh[CHUNK_SIZE];
-
-  // Global idx (first position of n strides)
-  const unsigned int gidx = blockIdx.x * CHUNK_SIZE + threadIdx.x;
-  // Local idx  (----//----)
-  const unsigned int lidx = blockIdx.x;
-  // Number of threads in the block
-  const unsigned int bdx = blockDim.x;
-  // (Global) Start of current block
-  const unsigned int bid = lidx * bdx;
-  // (Global) End of current block
-  const unsigned int bnd = bid+bdx;
-
-  // TODO: consider verifying if below includes all elements in chunk (by ceil)..
-  const unsigned int thread_elems = ceil( (float)CHUNK_SIZE / bdx);
-  const unsigned int stride = bdx;
-
-  // Get segment idx at start of block and its global offset
-  unsigned int sgm_id = sgm_id_arr[bdx];
-  unsigned int sgm_start = sgm_offset_arr[sgm_id];
-  // Get last segment element global idx
-  unsigned int sgm_end;
-  if (sgm_id != num_sgms-1)
-    sgm_end = sgm_offset_arr[sgm_id+1]-1;
-  else
-    sgm_end = tot_size-1;
-
-  // Check for possible conflict
-  bool conflict = false;
-  if (sgm_end < bnd) // TODO: verify this equality not off-by-1 or something..
-    conflict = true;
-
-  /***** If conflicts, handle segment splits within block *****/
-  unsigned int local_elem;
-  unsigned int global_elem;
-  if (conflict) {
-    while (sgm_end < bnd) {
-      // Jump in strides
-      for (int i=0;i<thread_elems;i++) {
-        local_elem = lidx + i*stride; // current local hist element
-        global_elem = gidx + i*stride;
-        // Update local histogram
-        if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-          if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-            atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
-        }
-      }
-      __syncthreads();
-
-      // TODO: Fix here
-      // Update global histogram
-      for (int i=0;i<thread_elems;i++) {
-        local_elem = lidx + i*stride;
-        global_elem = gidx + i*stride;
-        if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-          if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-            0;
-          //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
-        }
-      }
-
-      // Update start/end of segment
-      sgm_id++;
-      sgm_start = sgm_end;
-      if (sgm_id != num_sgms-1)
-        sgm_end = sgm_offset_arr[sgm_id+1]-1;
-      else
-        sgm_end = tot_size-1;
-    }
-    /***** If no conflict solve for trivial case *****/
-  } else {
-    // Jump in strides
-    for (int i=0;i<thread_elems;i++) {
-      // Current local hist element idx
-      local_elem = lidx + i*stride;
-      global_elem = gidx + i*stride;
-      // Update local histogram
-      if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE))
-        atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
-      else
-        break; // no need to do more strides
-    }
-  }
-
-  __syncthreads();
-  // Only relevant for trivial case
-  if (!conflict)
-    // TODO: Fix here
-    // Update global histogram
-    for (int i=0;i<thread_elems;i++) {
-      local_elem = lidx + i*stride;
-      global_elem = gidx + i*stride;
-      if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-        0;
-        //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
-      }
-    }
 }
 
 

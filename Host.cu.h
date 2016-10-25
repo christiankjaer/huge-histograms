@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "../cub/cub.cuh"
+#include <cub/cub.cuh>
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
@@ -179,7 +179,7 @@ void blockSgm (unsigned int block_size,
                                              blocks,
                                              sgm_offset,
                                              block_sgm);
-  cudaThreadSynchronize;
+  cudaThreadSynchronize();
 
 }
 

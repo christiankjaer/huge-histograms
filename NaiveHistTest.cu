@@ -5,6 +5,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include "Kernels.cu.h"
+#include "Host.cu.h"
 
 #define IMG_SIZE 8192
 #define HIST_SIZE 8192
@@ -67,7 +68,8 @@ int main() {
   gettimeofday(&t_start, NULL);
 
   cudaMemset(d_hist, 0, sizeof(int)*HIST_SIZE);
-  christiansHistKernel<<<1, 128>>>(IMG_SIZE, 64, 1, d_sgm_idx, d_sgm_offset, d_inds, d_hist);
+
+  christiansHistKernel<<<1, 256>>>(IMG_SIZE, 32, 1, d_sgm_idx, d_sgm_offset, d_inds, d_hist);
   cudaThreadSynchronize();
 
   gettimeofday(&t_end, NULL);
