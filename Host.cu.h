@@ -179,7 +179,7 @@ void blockSgm (unsigned int block_size,
                                              blocks,
                                              sgm_offset,
                                              block_sgm);
-  cudaThreadSynchronize;
+  cudaThreadSynchronize();
 
 }
 
