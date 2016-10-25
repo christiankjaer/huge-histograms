@@ -66,35 +66,89 @@ void compareTestEps(T* result, T* expected, int size, T eps){
 int main (int args, char** argv){
 
   printf("TESTING RADIX SORT\n");
-  int    data_size    = 1024*32;
-  float  max_rand_num = 30000.0;
-  float* data         = (float*)malloc(data_size * sizeof(float));
-  int*   inds_seq     = (int*)malloc(data_size * sizeof(int));
-  int*   inds_par     = (int*)malloc(data_size * sizeof(int));
 
-  // Random array construction
-  randArrSeq(data, data_size, max_rand_num);
+  // declare initial values
+  int    data_size     = 1024*16;
+  float  max_rand_num1 = 30000.0;
+  float  max_rand_num2 = 0.0;
+  float* data          = (float*)malloc(data_size * sizeof(float));
+  float* data_d;
+  int*   inds_seq      = (int*)malloc(data_size * sizeof(int));
+  int*   inds_par      = (int*)malloc(data_size * sizeof(int));
 
-  // Sequential histogram indexing and sorting test
-  arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num);
+  // fill the data array with random values
+  randArrSeq(data, data_size, max_rand_num1);
+
+  // check that the maximum number was found correctly
+  cudaMalloc((void**)&data_d, data_size * sizeof(float));
+  cudaMemcpy(data_d, data, data_size * sizeof(float), cudaMemcpyHostToDevice);
+  max_rand_num1 = maximumElementSeq(data, data_size);
+  max_rand_num2 = maximumElement<float>(data_d, data_size);
+  myAssert(max_rand_num1 == max_rand_num2);
+  update();
+
+  // generate and sort the index values sequentially
+  arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num1);
   radixSort(inds_seq, data_size);
+
+  // generate and sort the index values in parallel
+  histVals2Index<float>(data_size, data, inds_par);
+  radixSort(inds_par, data_size);
+
+  // test that the partial sorting is korrekt
   sortTest(inds_seq, data_size);
   update();
-  
-  // Tests if parallel historgam indexing are sorted correctly.
-  histVals2Index<float>(data_size, max_rand_num, data, inds_par);
-  radixSort(inds_par, data_size);
   sortTest(inds_par, data_size);
   update();
 
-  // Tests if parallel and sequential are sorted the same.
+  // ensure that the two index arrays match
   compareTest<int>(inds_par, inds_seq, data_size);
   update();
+
+  // clean up memory
   free(data);
+  cudaFree(data_d);
   free(inds_seq);
   free(inds_par);
   printf("\n");
 
+  printf("TESTING PREFIX SUM EXCLUSIVE\n");
+
+  // declare initial values
+  max_rand_num1  = 100.0;
+  data           = (float*)malloc(data_size * sizeof(float));
+  float  epsilon = 0.001;
+  float* data_out;
+  float* prefix_sum_seq = (float*)malloc(data_size * sizeof(float));
+  float* prefix_sum_par = (float*)malloc(data_size * sizeof(float));
+
+  // fill the data array with random values
+  randArrSeq(data, data_size, max_rand_num1);
+
+  // copy values to device
+  cudaMalloc((void**)&data_d, data_size * sizeof(float));
+  cudaMalloc((void**)&data_out, data_size * sizeof(float));
+  cudaMemcpy(data_d, data, data_size * sizeof(float), cudaMemcpyHostToDevice);
+
+  // compute the two prefix sum exclusives.
+  prefixSumExc(data_size, data_d, data_out);
+  scanExcPlusSeq(data, prefix_sum_seq, data_size);
+
+  // copy back the result from device
+  cudaMemcpy(prefix_sum_par, data_out, data_size * sizeof(float),
+             cudaMemcpyDeviceToHost);
+
+  // check that the resulting arrays differ with at most epsilon.
+  compareTestEps<float>(prefix_sum_par, prefix_sum_seq, data_size, epsilon);
+  update();
+
+  // clean up memory
+  cudaFree(data_d);
+  cudaFree(data_out);
+  free(data);
+  free(prefix_sum_par);
+  free(prefix_sum_seq);
+  printf("\n");
 
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;
