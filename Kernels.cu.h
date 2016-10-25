@@ -158,7 +158,7 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   __shared__ int Hsh[CHUNK_SIZE];
   
   // Global idx (first position of n strides)
-  const unsigned int gidx = blockIdx.x * CHUNCK_SIZE + threadIdx.x;
+  const unsigned int gidx = blockIdx.x * CHUNK_SIZE + threadIdx.x;
   // Local idx  (----//----)
   const unsigned int lidx = blockIdx.x;
   // Number of threads in the block
@@ -191,19 +191,31 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   unsigned int local_elem;
   unsigned int global_elem;
   if (conflict) {
-    while (smg_end < bnd) {
-      // TODO ... handle segment split
-      for (int i=0;i<num_threads;i++) {
+    while (sgm_end < bnd) {
+      // Jump in strides
+      for (int i=0;i<thread_elems;i++) {
 	local_elem = lidx + i*stride; // current local hist element
 	global_elem = gidx + i*stride;
-	
+	// Update local histogram
 	if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
 	  if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-	    atomicAdd(&Hsh[inds[local_elem]], 1); // Add to local shared histogram
+	    atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
 	}
-	__syncthreads();
-	
       }
+      __syncthreads();
+
+      // TODO: Fix here
+      // Update global histogram
+      for (int i=0;i<thread_elems;i++) {
+        local_elem = lidx + i*stride;
+	global_elem = gidx + i*stride;
+	if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
+	  if ((global_elem>=sgm_start) && (global_elem<sgm_end))
+	    0;
+	    //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
+	}
+      }
+      
       // Update start/end of segment
       sgm_id++;
       sgm_start = sgm_end;
@@ -215,13 +227,13 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   /***** If no conflict solve for trivial case *****/
   } else {
     // Jump in strides
-    for (int i=0;i<num_threads;i++) {
-      // current local hist element idx
+    for (int i=0;i<thread_elems;i++) {
+      // Current local hist element idx
       local_elem = lidx + i*stride;
       global_elem = gidx + i*stride;
-      
+      // Update local histogram
       if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE))
-	atomicAdd(&Hsh[inds[local_elem]], 1); // Add to local shared histogram
+	atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
       else
 	break; // no need to do more strides
     }
@@ -230,9 +242,15 @@ __global__ void hennesHistKernel(unsigned int tot_size,
   __syncthreads();
   // Only relevant for trivial case
   if (!conflict)
-    for (int i=0;i<num_threads;i++) {
-      elem = tid + i*stride; // current local hist element
-      hist[elem + sgm_id*CHUNK_SIZE] = Hsh[elem]; // add to global hist
+    // TODO: Fix here
+    // Update global histogram
+    for (int i=0;i<thread_elems;i++) {
+      local_elem = lidx + i*stride;
+      global_elem = gidx + i*stride;
+      if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
+	0;
+	//atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
+      }
     }
   
 }
