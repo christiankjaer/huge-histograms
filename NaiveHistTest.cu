@@ -6,7 +6,7 @@
 #include <sys/time.h>
 #include "Kernels.cu.h"
 
-#define IMG_SIZE 8192*1024
+#define IMG_SIZE 8192
 #define HIST_SIZE 8192
 
 long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
@@ -35,14 +35,19 @@ int main() {
   float *data = (float*) malloc(sizeof(float[IMG_SIZE]));
   int *inds = (int*) malloc(sizeof(size_t[IMG_SIZE]));
   int *hist = (int*) malloc(sizeof(unsigned int[HIST_SIZE]));
+  unsigned int sgm_idx[] = {0};
+  unsigned int sgm_offset[] = {0, 8192};
+  unsigned int num_sgms = 1;
 
   int *seq_hist = (int*) malloc(sizeof(unsigned int[HIST_SIZE]));
   memset(seq_hist, 0, sizeof(unsigned int)*HIST_SIZE);
 
-  int *d_inds, *d_hist;
+  unsigned int *d_inds, *d_hist, *d_sgm_idx, *d_sgm_offset;
 
   cudaMalloc(&d_inds, sizeof(int)*IMG_SIZE);
   cudaMalloc(&d_hist, sizeof(int)*HIST_SIZE);
+  cudaMalloc(&d_sgm_idx, sizeof(int)*1);
+  cudaMalloc(&d_sgm_offset, sizeof(int)*2);
 
   for (size_t i = 0; i < IMG_SIZE; i++) {
     data[i] = ((float)rand()/(float)RAND_MAX) * 256.0f;
@@ -56,10 +61,13 @@ int main() {
   printf("Histogram calculated in %d µs\n", elapsed);
 
   cudaMemcpy(d_inds, inds, sizeof(int)*IMG_SIZE, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_sgm_idx, sgm_idx, sizeof(int)*1, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_sgm_offset, sgm_offset, sizeof(int)*2, cudaMemcpyHostToDevice);
 
   gettimeofday(&t_start, NULL);
 
-  naiveHistKernel<<<1, 1024>>>(IMG_SIZE, d_inds, d_hist);
+  cudaMemset(d_hist, 0, sizeof(int)*HIST_SIZE);
+  christiansHistKernel<<<1, 128>>>(IMG_SIZE, 64, 1, d_sgm_idx, d_sgm_offset, d_inds, d_hist);
   cudaThreadSynchronize();
 
   gettimeofday(&t_end, NULL);
@@ -70,7 +78,7 @@ int main() {
 
   for (int i = 0; i < HIST_SIZE; i++) {
     if (seq_hist[i] != hist[i]) {
-      printf("INVALID %d != %d\n", seq_hist[i], hist[i]);
+      printf("INVALID %d != %d\n at %d", seq_hist[i], hist[i], i);
       break;
     }
   }

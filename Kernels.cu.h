@@ -2,6 +2,8 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
+#define GPU_HIST_SIZE 8192
+
 // @summary : Computes the histogram indexes based on a normalization of the data
 // @remarks : Assumes all values in the input array to be non-negative
 // @params  : input_arr_d -> the input values
@@ -149,13 +151,64 @@ __global__ void blockSgmKernel(unsigned int block_size,
    }
 }
 
+__global__ void christiansHistKernel(unsigned int tot_size,
+                                     unsigned int chunk_size,
+                                     unsigned int num_sgms,
+                                     unsigned int *sgm_idx,
+                                     unsigned int *sgm_offset,
+                                     unsigned int *inds,
+                                     unsigned int *hist) {
+
+  __shared__ int Hsh[GPU_HIST_SIZE];
+
+  
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
+  const unsigned sh_workload = GPU_HIST_SIZE / blockDim.x;
+  
+  unsigned int curr_sgm = sgm_idx[blockIdx.x];
+
+  unsigned int sgm_start = sgm_offset[curr_sgm];
+  unsigned int sgm_end = sgm_offset[curr_sgm + 1];
+
+
+  while (sgm_start < block_end) {
+    // Reset the shared memory.
+  
+    for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
+      Hsh[i] = 0;
+    }
+
+    __syncthreads();
+
+    // The sequential loop.
+    unsigned int offset = curr_sgm * GPU_HIST_SIZE;
+    for (unsigned int i = gid; i < block_end; i += blockDim.x) {
+      if (i < sgm_end) {
+        atomicAdd(&Hsh[inds[i] - offset], 1);
+      }
+    }
+    __syncthreads();
+    
+    // Write back to memory
+    for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
+      atomicAdd(&hist[offset + i], Hsh[i]);
+    }
+
+    curr_sgm++;
+    sgm_start = sgm_offset[curr_sgm];
+    sgm_end = sgm_offset[curr_sgm + 1];
+  }
+
+}
+
 __global__ void hennesHistKernel(unsigned int tot_size,
-				 unsigned int num_chunks,
-				 unsigned int num_sgms,
-				 unsigned int *sgm_id_arr,
-				 unsigned int *sgm_offset_arr,
-				 unsigned int *inds_arr,
-				 unsigned int *hist_arr) {
+    unsigned int num_chunks,
+    unsigned int num_sgms,
+    unsigned int *sgm_id_arr,
+    unsigned int *sgm_offset_arr,
+    unsigned int *inds_arr,
+    unsigned int *hist_arr) {
 
   // Block local histogram
   __shared__ int Hsh[CHUNK_SIZE];
@@ -197,13 +250,13 @@ __global__ void hennesHistKernel(unsigned int tot_size,
     while (sgm_end < bnd) {
       // Jump in strides
       for (int i=0;i<thread_elems;i++) {
-	local_elem = lidx + i*stride; // current local hist element
-	global_elem = gidx + i*stride;
-	// Update local histogram
-	if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-	  if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-	    atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
-	}
+        local_elem = lidx + i*stride; // current local hist element
+        global_elem = gidx + i*stride;
+        // Update local histogram
+        if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
+          if ((global_elem>=sgm_start) && (global_elem<sgm_end))
+            atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
+        }
       }
       __syncthreads();
 
@@ -211,23 +264,23 @@ __global__ void hennesHistKernel(unsigned int tot_size,
       // Update global histogram
       for (int i=0;i<thread_elems;i++) {
         local_elem = lidx + i*stride;
-	global_elem = gidx + i*stride;
-	if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-	  if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-	    0;
-	    //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
-	}
+        global_elem = gidx + i*stride;
+        if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
+          if ((global_elem>=sgm_start) && (global_elem<sgm_end))
+            0;
+          //atomicAdd(&hist[inds[global_elem]], Hsh[local_elem]);
+        }
       }
 
       // Update start/end of segment
       sgm_id++;
       sgm_start = sgm_end;
       if (sgm_id != num_sgms-1)
-	sgm_end = sgm_offset_arr[sgm_id+1]-1;
+        sgm_end = sgm_offset_arr[sgm_id+1]-1;
       else
-	sgm_end = tot_size-1;
+        sgm_end = tot_size-1;
     }
-  /***** If no conflict solve for trivial case *****/
+    /***** If no conflict solve for trivial case *****/
   } else {
     // Jump in strides
     for (int i=0;i<thread_elems;i++) {
@@ -236,9 +289,9 @@ __global__ void hennesHistKernel(unsigned int tot_size,
       global_elem = gidx + i*stride;
       // Update local histogram
       if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE))
-	atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
+        atomicAdd(&Hsh[inds_arr[local_elem]], 1); // Add to local shared histogram
       else
-	break; // no need to do more strides
+        break; // no need to do more strides
     }
   }
 
