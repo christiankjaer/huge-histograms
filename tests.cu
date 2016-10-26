@@ -111,6 +111,7 @@ int main (int args, char** argv){
   free(inds_seq);
   free(inds_par);
   printf("\n");
+  printf("%s\n", cudaGetErrorString(cudaGetLastError()));
 
   printf("TESTING PREFIX SUM EXCLUSIVE\n");
 
@@ -149,6 +150,71 @@ int main (int args, char** argv){
   free(prefix_sum_par);
   free(prefix_sum_seq);
   printf("\n");
+  printf("%s\n", cudaGetErrorString(cudaGetLastError()));
+
+  printf("TESTING METADATA COMPUTATIONS\n");
+  max_rand_num1  = 500000.0;
+  data_size      = 5000;
+  data           = (float*)malloc(data_size * sizeof(float));
+  inds_seq       = (int*)malloc(data_size * sizeof(int));
+  inds_par       = (int*)malloc(data_size * sizeof(int));
+  int* inds_tmp  = (int*)malloc(data_size * sizeof(int));
+
+  // generate test data.
+  randArrSeq(data, data_size, max_rand_num1);
+  arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num1);
+  radixSort(inds_seq, data_size);
+  copyArray(inds_seq, inds_par, data_size);
+
+  // test that the index_arrays are sorted and identical
+  // otherwise, the rest of the test is invalid.
+  sortTest(inds_seq, data_size);
+  update();
+  sortTest(inds_par, data_size);
+  update();
+  compareTest<int>(inds_par, inds_seq, data_size);
+  update();
+
+  // define known meta data about segments
+  int  num_segments   = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
+  int* segment_sizes  = (int*)malloc(num_segments*sizeof(int));
+  int* segment_sizes2 = (int*)malloc(num_segments*sizeof(int));
+  int* segment_sizes_d;
+  int* segment_d;
+  int* inds_d;
+  cudaMalloc((void**)&segment_sizes_d, num_segments * sizeof(int));
+  cudaMalloc((void**)&segment_d, data_size * sizeof(int));
+  cudaMalloc((void**)&inds_d, data_size * sizeof(int));
+  cudaMemcpy(inds_d, inds_par, data_size * sizeof(int), cudaMemcpyHostToDevice);
+
+  // Compare the results by visual inspection
+  segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
+  metaData(data_size, inds_d, segment_d, segment_sizes_d, num_segments);
+  cudaMemcpy(segment_sizes2, segment_sizes_d,
+             num_segments * sizeof(int), cudaMemcpyDeviceToHost);
+  printf("\n");
+
+  // TODO : Automate this comparison.
+  printf("Segment Sizes\n");
+  printIntArraySeq(segment_sizes , num_segments);
+  printf("Segment Offsets\n");
+  printIntArraySeq(segment_sizes2, num_segments);
+
+  // Test the sequential and parallel segmentsize funcitons
+  printf("\n");
+  printf("%s\n", cudaGetErrorString(cudaGetLastError()));
+
+  // Clean up memory
+  cudaFree(segment_sizes_d);
+  cudaFree(segment_d);
+  cudaFree(inds_d);
+  cudaFree(data_d);
+  free(segment_sizes);
+  free(segment_sizes2);
+  free(inds_par);
+  free(inds_seq);
+  free(inds_tmp);
+  free(data);
 
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;

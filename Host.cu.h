@@ -257,15 +257,30 @@ void naiveHist(T*      h_array,
 
 }
 
-// @summary: finds index for segment offset, for each block
+// @summary : for now, just computes segment_sizes.
+void metaData(unsigned int inds_size,
+              int*         inds_d,
+              int*         segment_d,
+              int*         segment_sizes_d,
+              int          num_segments
+              ){
+  int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
+  cudaMemset(segment_d, 0,  inds_size * sizeof(int));
+  cudaMemset(segment_sizes_d, 0,  num_segments * sizeof(int));
+  segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
+    (inds_d, inds_size, segment_d, segment_sizes_d, num_segments);
+  cudaThreadSynchronize();
+}
 
+// @summary: finds index for segment offset, for each block
 void blockSgm (unsigned int block_size,
-               unsigned int   tot_size,
+               unsigned int tot_size,
                int*         sgm_offset,
                int*          block_sgm){
-  const unsigned int num_chunks = ceil((float) tot_size / (CHUNK_SIZE*block_size)); // number of chunks to be worked on
-  const unsigned int num_blocks = ceil(num_chunks/block_size); // Number of blocks to construct block segment array
-
+  // number of chunks to be worked on
+  const unsigned int num_chunks = ceil((float) tot_size / (CHUNK_SIZE*block_size));
+  // Number of blocks to construct block segment array
+  const unsigned int num_blocks = ceil(num_chunks/block_size);
 
   // executes kernel
   blockSgmKernel<<<num_blocks, block_size>>>(block_size,
@@ -273,7 +288,6 @@ void blockSgm (unsigned int block_size,
                                              sgm_offset,
                                              block_sgm);
   cudaThreadSynchronize();
-
 }
 
 // @summary: Wrapper for histogram kernel
