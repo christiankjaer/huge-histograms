@@ -174,14 +174,13 @@ int main (int args, char** argv){
 
   int  num_segments  = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
   int* segment_sizes = (int*)malloc(num_segments*sizeof(int));
-  segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
-
   int* segment_sizes_d;
   int* segment_d;
   cudaMalloc((void**)&segment_sizes_d, num_segments * sizeof(int));
   cudaMalloc((void**)&segment_d, data_size * sizeof(int));
 
   // TODO : Write a test, which matches with the parallel function
+  segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
   printIntArraySeq(segment_sizes, num_segments);
 
   // Test the sequential and parallel segmentsize funcitons
