@@ -150,6 +150,37 @@ int main (int args, char** argv){
   free(prefix_sum_seq);
   printf("\n");
 
+  printf("TESTING METADATA COMPUTATIONS\n");
+  max_rand_num1  = 500000.0;
+  data_size      = 5000;
+  data           = (float*)malloc(data_size * sizeof(float));
+  inds_seq       = (int*)malloc(data_size * sizeof(int));
+  int* inds_tmp  = (int*)malloc(data_size * sizeof(int));
+
+  // fill the data array with random values and genreate indexes
+  randArrSeq(data, data_size, max_rand_num1);
+  arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num1);
+
+  // varify that the sorting has happend
+  // (otherwise, the next test does not make sense)
+  radixSort(inds_seq, data_size);
+  sortTest(inds_seq, data_size);
+  update();
+
+  int  num_segments = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
+  int* segment_sizes = (int*)malloc(num_segments*sizeof(int));
+  segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
+
+  printIntArraySeq(segment_sizes, num_segments);
+  // TODO : Write a test, which matches with the parallel function
+
+  // test the sequential and parallel segmentsize funcitons
+  printf("\n");
+
+  free(inds_seq);
+  free(inds_tmp);
+  free(data);
+
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;
 }

@@ -15,6 +15,26 @@ void arr2HistIdxSeq(float* input_arr, int* hist_inds,
   }
 }
 
+// @summary : counts the number of segments for the index array
+// @returns : the array of segment sizes
+void segmentSizesSeq(int* inds, int inds_size, int* segment_sizes, int num_segments){
+  int this_segment_max = CHUNK_SIZE;
+  int this_segment     = 0;
+  // zero segment_sizes
+  for (int i = 0; i < num_segments; i ++){
+    segment_sizes[i] = 0;
+  }
+  // assumes the inds_array already partially sorted
+  for (int i = 0; i < inds_size; i++){
+    if (inds[i] >= this_segment_max){
+      this_segment_max += CHUNK_SIZE;
+      this_segment++;
+    }
+    segment_sizes[this_segment] += 1;
+  }
+}
+
+// @summary : finds, the greatest element, in an array of floats
 float maximumElementSeq(float* array, int arr_size){
   float my_max = array[0];
   for (int i = 1; i < arr_size; i++){
@@ -32,9 +52,10 @@ void randArrSeq(float* array, int array_length, float max_rand_num){
 }
 
 // @summary : fills an array with zeroes
-void zeroArrSeq(float* array, int array_length){
+template<class T>
+void zeroArrSeq(T* array, int array_length){
   for (int i = 0; i < array_length; i++){
-    array[i] = 0.0;
+    array[i] = (T)0;
   }
 }
 
@@ -61,12 +82,12 @@ __inline__ void makeKeysSeq(int* A, int* K, int N, int MASK){
 // @remarks : prints only 10 elements pr. line
 void printIntArraySeq(int* array, int array_length){
   printf("[");
-  int j = 0;
+  int j = 1;
   for (int i = 0; i < array_length; i++){
     printf("%6d", array[i]);
     if (i != array_length-1){
       printf(",");
-      if (j == 10) {printf("\n "); j = 0;}
+      if (j == 10) {printf(" -- index %d\n", i); j = 1;}
       else{j++;}
     }
   }
@@ -77,12 +98,12 @@ void printIntArraySeq(int* array, int array_length){
 // @remarks : prints only 10 elements pr. line
 void printFloatArraySeq(float* array, int array_length){
   printf("[");
-  int j = 0;
+  int j = 1;
   for (int i = 0; i < array_length; i++){
     printf("%6f", array[i]);
     if (i != array_length-1){
       printf(",");
-      if (j == 10) {printf("\n "); j = 0;}
+      if (j == 10) {printf("\n "); j = 1;}
       else{j++;}
     }
   }

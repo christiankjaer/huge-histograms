@@ -166,8 +166,17 @@ void naiveHist(T*      h_array,
 
 }
 
-// @summary: finds index for segment offset, for each block
+template<class T>
+void metaData(unsigned int image_size,
+              T*           vals_d,
+              int*         inds_d,
+              int*         sgm_offsets_d,
+              int*         sgm_offsets_size
+              ){
 
+}
+
+// @summary: finds index for segment offset, for each block
 void blockSgm (unsigned int block_size,
                unsigned int   tot_size,
                int*         sgm_offset,
