@@ -166,21 +166,26 @@ void naiveHist(T*      h_array,
 
 }
 
-template<class T>
-void metaData(unsigned int image_size,
-              T*           vals_d,
+// @summary : for now, just computes segment_sizes.
+void metaData(unsigned int inds_size,
               int*         inds_d,
-              int*         sgm_offsets_d,
-              int*         sgm_offsets_size
+              int*         segment_d,
+              int*         segment_sizes_d,
+              int          num_segments
               ){
-
+  int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
+  cudaMemset(segment_d, 0,  inds_size * sizeof(int));
+  cudaMemset(segment_sizes_d, 0,  num_segments * sizeof(int));
+  segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
+    (inds_d, inds_size, segment_d, segment_sizes_d, num_segments);
+  cudaThreadSynchronize();
 }
 
 // @summary: finds index for segment offset, for each block
 void blockSgm (unsigned int block_size,
-               unsigned int   tot_size,
+               unsigned int tot_size,
                int*         sgm_offset,
-               int*          block_sgm){
+               int*         block_sgm){
   int blocks     = ceil(tot_size/block_size); // Total number of blocks for image with size N
   int num_blocks = ceil(  blocks/block_size); // Number of blocks to compute segment block
 

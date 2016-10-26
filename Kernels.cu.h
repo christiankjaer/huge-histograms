@@ -19,24 +19,30 @@ __global__ void histVals2IndexKernel(float* input_arr_d,
   }
 }
 
-// @summary : computes the segment sizes.
-__global__ void segmentSizesNaive(int* inds_d,
-                                  int  inds_size,
-                                  int* segment_d, // sort of flag array.
-                                  int* segment_sizes_d,
-                                  int  num_segments){
+// @summary : computes the offsets
+__global__ void segmentOffsets(int* inds_d,
+                               int  inds_size,
+                               int* segment_d, // sort of flag array.
+                               int* segment_offsets_d,
+                               int  num_segments){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
     int this_segment_max = CHUNK_SIZE;
     int this_segment     = 0;
+    // TODO : find a smart formula for this.
     while (inds_d[gid] >= this_segment_max){
       this_segment_max += CHUNK_SIZE;
       this_segment++;
     }
     segment_d[gid] = this_segment;
     __syncthreads();
-    if (gid != 0 && this_segment != segment_d[gid-1]){
-      segment_sizes_d[this_segment] = gid;
+    if (gid == 0){
+      segment_offsets_d[0] = 0;
+    }
+    else{
+     if (this_segment != segment_d[gid-1]){
+       segment_offsets_d[this_segment] = gid;
+     }
     }
   }
 }

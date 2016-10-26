@@ -110,4 +110,11 @@ void printFloatArraySeq(float* array, int array_length){
   printf("].\n");
 }
 
+template<class T>
+void copyArray (T* arr, T* dst,int arr_size){
+  for (int i = 0; i < arr_size; i++){
+    dst[i] = arr[i];
+  }
+}
+
 #endif //ARRAY_LIB
