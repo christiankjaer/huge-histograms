@@ -155,28 +155,42 @@ int main (int args, char** argv){
   data_size      = 5000;
   data           = (float*)malloc(data_size * sizeof(float));
   inds_seq       = (int*)malloc(data_size * sizeof(int));
+  inds_par       = (int*)malloc(data_size * sizeof(int));
   int* inds_tmp  = (int*)malloc(data_size * sizeof(int));
 
   // fill the data array with random values and genreate indexes
   randArrSeq(data, data_size, max_rand_num1);
   arr2HistIdxSeq(data, inds_seq, data_size, max_rand_num1);
+  histVals2Index<float>(data_size, data, inds_par);
 
   // varify that the sorting has happend
   // (otherwise, the next test does not make sense)
   radixSort(inds_seq, data_size);
   sortTest(inds_seq, data_size);
   update();
+  radixSort(inds_par, data_size);
+  sortTest(inds_par, data_size);
+  update();
 
-  int  num_segments = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
+  int  num_segments  = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
   int* segment_sizes = (int*)malloc(num_segments*sizeof(int));
   segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
 
-  printIntArraySeq(segment_sizes, num_segments);
-  // TODO : Write a test, which matches with the parallel function
+  int* segment_sizes_d;
+  int* segment_d;
+  cudaMalloc((void**)&segment_sizes_d, num_segments * sizeof(int));
+  cudaMalloc((void**)&segment_d, data_size * sizeof(int));
 
-  // test the sequential and parallel segmentsize funcitons
+  // TODO : Write a test, which matches with the parallel function
+  printIntArraySeq(segment_sizes, num_segments);
+
+  // Test the sequential and parallel segmentsize funcitons
   printf("\n");
 
+  cudaFree(segment_sizes_d);
+  cudaFree(segment_d);
+  free(segment_sizes);
+  free(inds_par);
   free(inds_seq);
   free(inds_tmp);
   free(data);
