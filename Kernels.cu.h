@@ -26,6 +26,7 @@ __global__ void segmentOffsets(unsigned int* inds_d,
                                unsigned int  inds_size,
                                unsigned int* segment_d, // sort of flag array.
                                unsigned int* segment_offsets_d,
+                               unsigned int  block_workload,
                                unsigned int  block_size,
                                unsigned int* block_sgm_index_d){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -36,15 +37,15 @@ __global__ void segmentOffsets(unsigned int* inds_d,
     __syncthreads();
     if (gid == 0){
       segment_offsets_d[0] = 0;
-      block_sgm_index_d[0] = 0;
     }
     else{
      if (this_segment != segment_d[gid-1]){
        segment_offsets_d[this_segment] = gid;
      }
-     if (gid % (block_size * CHUNK_SIZE) == 0){
-       block_sgm_index_d[gid/(block_size * CHUNK_SIZE)] = this_segment;
-     }
+    }
+    if ((gid % block_workload) == 0){
+      block_sgm_index_d[gid/block_workload] = this_segment;
+      printf("%d - %d\n", gid, this_segment);
     }
   }
 }

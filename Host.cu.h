@@ -261,15 +261,23 @@ void naiveHist(T*      h_array,
 void metaData(unsigned int  inds_size,
               unsigned int* inds_d,
               unsigned int  num_segments,
-              unsigned int* segment_sizes_d
+              unsigned int  block_workload,
+              unsigned int* segment_sizes_d,
+              unsigned int* block_sgm_index_d
               ){
-  int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
+  int num_blocks = ceil((float)inds_size / CUDA_BLOCK_SIZE);
   unsigned int* segment_d;
   cudaMalloc(&segment_d, sizeof(unsigned int)*inds_size);
   cudaMemset(segment_d, 0, inds_size * sizeof(unsigned int));
   cudaMemset(segment_sizes_d, 0, num_segments * sizeof(unsigned int));
   segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (inds_d, inds_size, segment_d, segment_sizes_d);
+    (inds_d,
+     inds_size,
+     segment_d,
+     segment_sizes_d,
+     block_workload,
+     CUDA_BLOCK_SIZE,
+     block_sgm_index_d);
   cudaThreadSynchronize();
 }
 
@@ -310,7 +318,7 @@ void histogramConstructor(unsigned int block_size,
   int*   hist_d;
   int*   sgm_offset;
   int*   sgm_id_arr;
-    
+
   cudaMalloc(  (void**)&d_in, tot_size * sizeof(T));
   cudaMalloc((void**)&inds_d, tot_size * sizeof(int));
   cudaMalloc((void**)&sorted_inds_d, tot_size * sizeof(int));
