@@ -34,16 +34,18 @@ __global__ void segmentOffsets(unsigned int* inds_d,
   if (gid < inds_size){
     // assumes inds already partially sorted
     int this_segment     = inds_d[gid] / CHUNK_SIZE;
-    segment_d[gid] = this_segment;
+    segment_d[gid]       = this_segment;
     __syncthreads();
     if (gid == 0){
       segment_offsets_d[0] = 0;
-    }
-    else{
+      //printf("first offset \n %d\n", gid);
+    } else {
      if (this_segment != segment_d[gid-1]){
+       //printf("id %d set %d \n", gid, this_segment);
        segment_offsets_d[this_segment] = gid;
      }
     }
+
     if ((gid % block_workload) == 0){
       block_sgm_index_d[gid/block_workload] = this_segment;
       //printf("%d - %d\n", gid, this_segment);

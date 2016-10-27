@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <../cub/cub.cuh>
+#include "sequential/arraylib.cu.h"
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
@@ -291,6 +292,12 @@ void histogramConstructor(unsigned int   tot_size,
   const unsigned int num_blocks        = ceil((float)tot_size/block_workload);
   const unsigned int num_segments      = ceil((float)HISTOGRAM_SIZE/CHUNK_SIZE);
   //const unsigned int work_size  = ceil((float)tot_size/(CHUNK_SIZE*block_size));
+  printf("tw: %d, bw %d, nb %d, ns %d\n", 
+         thread_workload,
+         block_workload,
+         num_blocks,
+         num_segments);
+
 
   /* device variables */
   T*                       d_in;
@@ -299,6 +306,7 @@ void histogramConstructor(unsigned int   tot_size,
   unsigned int*          hist_d;
   unsigned int*      sgm_offset;
   unsigned int*    block_sgm_id;
+  //unsigned int*            test;
 
   cudaMalloc(  (void**)&d_in, tot_size * sizeof(T));
   cudaMalloc((void**)&inds_d, tot_size * sizeof(int));
@@ -307,6 +315,11 @@ void histogramConstructor(unsigned int   tot_size,
   // converts values to histogram indices
   histVals2IndexDevice<T>(tot_size, d_in, inds_d);
 
+  /* test = (unsigned int*)malloc(tot_size*sizeof(int)); */
+  /* cudaMemcpy(test, inds_d, tot_size * sizeof(T), cudaMemcpyDeviceToHost); */
+  /* printf("vals to inds array \n"); */
+  /* printIntArraySeq((int*) test, tot_size); */
+  /* free(test); */
   // Free input array after converting to histogram indices
   cudaFree(d_in);
 
@@ -314,13 +327,20 @@ void histogramConstructor(unsigned int   tot_size,
   // Sorts histogram index array
   radixSortDevice(inds_d, sorted_inds_d, tot_size);
 
+  /* test = (unsigned int*)malloc(tot_size*sizeof(int)); */
+  /* cudaMemcpy(test, sorted_inds_d, tot_size * sizeof(T), cudaMemcpyDeviceToHost); */
+  /* printf("sorted inds array \n"); */
+  /* printIntArraySeq((int*) test, tot_size); */
+  /* free(test); */
+
   //free random hist inds;
   cudaFree(inds_d);
 
   // allocate arrays to contain segment offset, and block segment index
   cudaMalloc((void**)&sgm_offset, num_segments*sizeof(int));
   cudaMalloc((void**)&block_sgm_id, num_blocks  *sizeof(int));
-
+  /* cudaMemset(sgm_offset, 0, num_segments * sizeof(int)); */
+  /* cudaMemset(block_sgm_id, 0, num_blocks * sizeof(int)); */
   // Find segment offset and segment for which a block starts in
   // Meta data computes both
   metaData(tot_size, 
@@ -330,11 +350,23 @@ void histogramConstructor(unsigned int   tot_size,
            sgm_offset, 
            block_sgm_id);
 
+  /* test = (unsigned int*)malloc(num_segments*sizeof(int)); */
+  /* cudaMemcpy(test, sgm_offset, num_segments * sizeof(T), cudaMemcpyDeviceToHost); */
+  /* printf("segment offsets \n"); */
+  /* printIntArraySeq((int*) test, num_segments); */
+  /* free(test); */
+
+  /* test = (unsigned int*)malloc(num_segments*sizeof(int)); */
+  /* cudaMemcpy(test, block_sgm_id, num_blocks * sizeof(T), cudaMemcpyDeviceToHost); */
+  /* printf("block segment id array \n"); */
+  /* printIntArraySeq((int*) test, num_blocks); */
+  /* free(test); */
+
   // Allocates histogram on device
   cudaMalloc((void**)&hist_d, HISTOGRAM_SIZE*sizeof(int));
+  cudaMemset(hist_d, 0, HISTOGRAM_SIZE * sizeof(unsigned int));
 
   // Constructs histogram, only works on histograms big enough to fit on GPU memory
-
   christiansHistKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>(tot_size,
                                                         HISTOGRAM_SIZE,
                                                         thread_workload,

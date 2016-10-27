@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include "Host.cu.h"
-#include "sequential/arraylib.cu.h"
+//#include "sequential/arraylib.cu.h"
 #include "setup.cu.h"
 
 int  passed = 0;
@@ -68,8 +68,8 @@ int main (int args, char** argv){
   printf("TESTING RADIX SORT\n");
 
   // declare initial values
-  int    data_size     = 10; //1024*16;
-  float  max_rand_num1 = 5.0;
+  int    data_size     = 1024*16;
+  float  max_rand_num1 = 1024*16;
   float  max_rand_num2 = 0.0;
   float* data          = (float*)malloc(data_size * sizeof(float));
   float* data_d;
@@ -236,6 +236,7 @@ int main (int args, char** argv){
   
   histogramConstructor<float>(data_size, data, hist_h);
 
+  printf("Final histogram kernel\n");
   printIntArraySeq((int *) hist_h, HISTOGRAM_SIZE);
   free(hist_h);
   free(data);
