@@ -54,8 +54,7 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 __global__ void segmentOffsets(int* inds_d,
                                int  inds_size,
                                int* segment_d, // sort of flag array.
-                               int* segment_offsets_d,
-                               int  num_segments){
+                               int* segment_offsets_d){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
     int this_segment_max = CHUNK_SIZE;
@@ -155,8 +154,7 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 
 // @summary: for each block, it finds respective segment which it belongs to
 
-__global__ void blockSgmKernel(unsigned int block_size,
-                               unsigned int num_chunks,
+__global__ void blockSgmKernel(unsigned int num_chunks,
                                int*         sgm_offset,
                                int*          block_sgm){
 
@@ -164,15 +162,18 @@ __global__ void blockSgmKernel(unsigned int block_size,
   
   /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
   /* sgm_offset = [0, 37 , 1000, 201020, ...] */
-
+  /* if (gid == 0){ */
+  /*   block_sgm[gid] = gid; */
+  /* } else { */
   if (gid < num_chunks){
     //forall (int i = 0; i < num_blocks; i++) {
-    int tmp = gid * block_size * CHUNK_SIZE;
+    int tmp = gid * blockDim.x * CHUNK_SIZE;
     int j = 0;
-    while (sgm_offset[j] >= tmp){
+    while (sgm_offset[j] <= tmp){
       j++;
     }
     block_sgm[gid] = j;
+    //    }
   }
 }
 
@@ -313,10 +314,10 @@ __global__ void hennesHistKernel(unsigned int tot_size,
 __global__ void grymersHistKernel(unsigned int tot_size,
                                   unsigned int num_chunks,
                                   unsigned int num_sgms,
-                                  unsigned int *sgm_id_arr,
-                                  unsigned int *sgm_offset_arr,
-                                  unsigned int *inds_arr,
-                                  unsigned int *hist_arr) {
+                                  int *sgm_id_arr,
+                                  int *sgm_offset_arr,
+                                  int *inds_arr,
+                                  int *hist_arr) {
   
   // Block local histogram
   __shared__ int Hsh[CHUNK_SIZE];

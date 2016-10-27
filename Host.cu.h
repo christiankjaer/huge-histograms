@@ -260,33 +260,34 @@ void naiveHist(T*      h_array,
 // @summary : for now, just computes segment_sizes.
 void metaData(unsigned int inds_size,
               int*         inds_d,
-              int*         segment_d,
-              int*         segment_sizes_d,
-              int          num_segments
-              ){
+              int*         segment_offset_d){
   int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
-  cudaMemset(segment_d, 0,  inds_size * sizeof(int));
-  cudaMemset(segment_sizes_d, 0,  num_segments * sizeof(int));
+  int* sgm_tmp;
+  cudaMalloc((void**)&sgm_tmp, inds_size * sizeof(int));
+  cudaMemset(sgm_tmp, 0,  inds_size * sizeof(int));
+  cudaMemset(segment_offset_d, 0,  HISTOGRAM_SIZE/CHUNK_SIZE * sizeof(int));
   segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (inds_d, inds_size, segment_d, segment_sizes_d, num_segments);
+    (inds_d, inds_size, sgm_tmp, segment_offset_d);
   cudaThreadSynchronize();
 }
 
 // @summary: finds index for segment offset, for each block
-void blockSgm (unsigned int block_size,
-               unsigned int   tot_size,
-               int*         sgm_offset,
-               int*          block_sgm){
-  const unsigned int num_chunks = ceil((float) tot_size / (CHUNK_SIZE*block_size)); // number of chunks to be worked on
-  const unsigned int num_blocks = ceil(num_chunks/block_size); // Number of blocks to construct block segment array
+void blockSgm (unsigned int     tot_size,
+               unsigned int num_segments,
+               int*           sgm_offset,
+               int*            block_sgm){
+  // number of chunks to be worked on
+  const unsigned int num_chunks = ceil((float) tot_size / 
+                                       (float)(CHUNK_SIZE*CUDA_BLOCK_SIZE)); 
+  // Number of blocks to construct block segment array  
+  const unsigned int num_blocks = ceil(num_segments/CUDA_BLOCK_SIZE);
+
 
   // executes kernel
-  blockSgmKernel<<<num_blocks, block_size>>>(block_size,
-                                             num_chunks,
-                                             sgm_offset,
-                                             block_sgm);
+  blockSgmKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>(num_chunks,
+                                                  sgm_offset,
+                                                  block_sgm);
   cudaThreadSynchronize();
-
 }
 
 // @summary: Wrapper for histogram kernel
@@ -295,9 +296,9 @@ void histogramConstructor(unsigned int block_size,
                           unsigned int   tot_size,
                           T*              input_h,
                           int*             hist_h){
-  const unsigned int num_blocks   = ceil((float)tot_size/block_size);
-  const unsigned int num_chunks   = ceil((float)tot_size/(CHUNK_SIZE*block_size));
-  const unsigned int num_segments = ceil((float)tot_size/CHUNK_SIZE);
+  const unsigned int num_blocks   = ceil((float)tot_size/(CHUNK_SIZE*CUDA_BLOCK_SIZE));
+  const unsigned int num_chunks   = ceil((float)tot_size/(CHUNK_SIZE));
+  const unsigned int num_segments = ceil((float)HISTOGRAM_SIZE/CHUNK_SIZE);
   //const unsigned int work_size  = ceil((float)tot_size/(CHUNK_SIZE*block_size));
 
   /* device variables */
@@ -323,36 +324,30 @@ void histogramConstructor(unsigned int block_size,
   radixSortDevice(inds_d, sorted_inds_d, tot_size);
   //cudaFree(inds_d);
 
-  // allocate arrays to contain segment offset
+  // allocate arrays to contain segment offset, and block segment index
   cudaMalloc((void**)&sgm_offset, num_segments*sizeof(int));
-  
-  // Find segment size, 
-  // TODO: USE FUNCTION TO GET SEGMENT OFFSET ARRAY
-  // WAITING ON JOACHIM TO COMMIT HIS REDUCTION TO FIND SEGMENT SHAPE ARRAY
-  /* histVals2IndexDevice<int>(tot_size, sorted_inds_d, inds_d); */
-  /* naiveHistKernel<<<num_blocks, block_size>>>(); */
-
-  // allocates memory for segment id array
   cudaMalloc((void**)&sgm_id_arr, num_chunks*sizeof(T));
 
-  /* // Find each blocks starting segment indices */
-  /* blockSgm(block_size, tot_size, sgm_offset, sgm_id_arr); */
+  // Find segment offset and segment for which a block starts in
+  // Meta data computes both
+  metaData(tot_size, sorted_inds_d, sgm_offset);
+  
 
   // Allocates histogram on device
   cudaMalloc((void**)&hist_d, HISTOGRAM_SIZE*sizeof(int));
 
-  /* // Constructs histogram, only works on histograms big enough to fit on GPU memory */
-  /* grymersHistKernel<<<num_blocks, block_size>>>(tot_size,    // data input size */
-  /*                                               num_chunks,  // number of workloads */
-  /*                                               num_sgms,    // number of segments */
-  /*                                               sgm_id_arr,  // Workload segment index */
-  /*                                               sgm_offset,  // Segment offset array */
-  /*                                               sorted_inds_d,      // histogram indexes */
-  /*                                               hist_d);     // global histogram */
-  /* cudaThreadSynchronize(); */
+  // Constructs histogram, only works on histograms big enough to fit on GPU memory
+  grymersHistKernel<<<num_blocks, block_size>>>(tot_size,    // data input size
+                                                num_chunks,  // number of workloads
+                                                HISTOGRAM_SIZE/CHUNK_SIZE, // number of segments
+                                                sgm_id_arr,  // Workload segment index
+                                                sgm_offset,  // Segment offset array
+                                                sorted_inds_d,      // histogram indexes
+                                                hist_d);     // global histogram
+  cudaThreadSynchronize();
   
-  /* // copying final histogram back to host from device */
-  /* cudaMemcpy(hist_h, hist_d, HISTOGRAM_SIZE*sizeof(int), cudaMemcpyDeviceToHost); */
+  // copying final histogram back to host from device
+  cudaMemcpy(hist_h, hist_d, HISTOGRAM_SIZE*sizeof(int), cudaMemcpyDeviceToHost);
 
   // Free up all device memory
   cudaFree(inds_d);

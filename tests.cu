@@ -189,7 +189,7 @@ int main (int args, char** argv){
 
   // Compare the results by visual inspection
   segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
-  metaData(data_size, inds_d, segment_d, segment_sizes_d, num_segments);
+  metaData(data_size, inds_d, segment_sizes_d);
   cudaMemcpy(segment_sizes2, segment_sizes_d,
              num_segments * sizeof(int), cudaMemcpyDeviceToHost);
   printf("\n");
@@ -204,6 +204,10 @@ int main (int args, char** argv){
   printf("\n");
   printf("%s\n", cudaGetErrorString(cudaGetLastError()));
 
+
+
+  //update();
+
   // Clean up memory
   cudaFree(segment_sizes_d);
   cudaFree(segment_d);
@@ -215,6 +219,7 @@ int main (int args, char** argv){
   free(inds_seq);
   free(inds_tmp);
   free(data);
+
 
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;
