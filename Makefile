@@ -14,6 +14,11 @@ segind:
 	./segind
 	make -s clean
 
+memalloc:
+	nvcc -Wno-deprecated-gpu-targets -o malloc ./CUDAMALLOC.cu
+	./malloc
+	rm -rf ./malloc
+
 tests:
 	make -s clean
 	nvcc -Wno-deprecated-gpu-targets -o tests  ./tests.cu
