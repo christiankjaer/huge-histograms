@@ -50,6 +50,33 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
   }
 }
 
+// @summary : computes the offsets
+__global__ void segmentOffsets(int* inds_d,
+                               int  inds_size,
+                               int* segment_d, // sort of flag array.
+                               int* segment_offsets_d,
+                               int  num_segments){
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (gid < inds_size){
+    int this_segment_max = CHUNK_SIZE;
+    int this_segment     = 0;
+    // TODO : find a smart formula for this.
+    while (inds_d[gid] >= this_segment_max){
+      this_segment_max += CHUNK_SIZE;
+      this_segment++;
+    }
+    segment_d[gid] = this_segment;
+    __syncthreads();
+    if (gid == 0){
+      segment_offsets_d[0] = 0;
+    }
+    else{
+     if (this_segment != segment_d[gid-1]){
+       segment_offsets_d[this_segment] = gid;
+     }
+    }
+  }
+}
 
 
 /* Global segment counter, initilize before running segmentedHistKernel */
