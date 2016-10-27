@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "../cub/cub.cuh"
+#include <../cub/cub.cuh>
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
@@ -258,35 +258,26 @@ void naiveHist(T*      h_array,
 }
 
 // @summary : for now, just computes segment_sizes.
-void metaData(unsigned int inds_size,
-              int*         inds_d,
-              int*         segment_offset_d){
-  int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
-  int* sgm_tmp;
-  cudaMalloc((void**)&sgm_tmp, inds_size * sizeof(int));
-  cudaMemset(sgm_tmp, 0,  inds_size * sizeof(int));
-  cudaMemset(segment_offset_d, 0,  HISTOGRAM_SIZE/CHUNK_SIZE * sizeof(int));
+void metaData(unsigned int  inds_size,
+              unsigned int* inds_d,
+              unsigned int  num_segments,
+              unsigned int  block_workload,
+              unsigned int* segment_sizes_d,
+              unsigned int* block_sgm_index_d
+              ){
+  int num_blocks = ceil((float)inds_size / CUDA_BLOCK_SIZE);
+  unsigned int* segment_d;
+  cudaMalloc(&segment_d, sizeof(unsigned int)*inds_size);
+  cudaMemset(segment_d, 0, inds_size * sizeof(unsigned int));
+  cudaMemset(segment_sizes_d, 0, num_segments * sizeof(unsigned int));
   segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (inds_d, inds_size, sgm_tmp, segment_offset_d);
-  cudaThreadSynchronize();
-}
-
-// @summary: finds index for segment offset, for each block
-void blockSgm (unsigned int     tot_size,
-               unsigned int num_segments,
-               int*           sgm_offset,
-               int*            block_sgm){
-  // number of chunks to be worked on
-  const unsigned int num_chunks = ceil((float) tot_size / 
-                                       (float)(CHUNK_SIZE*CUDA_BLOCK_SIZE)); 
-  // Number of blocks to construct block segment array  
-  const unsigned int num_blocks = ceil(num_segments/CUDA_BLOCK_SIZE);
-
-
-  // executes kernel
-  blockSgmKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>(num_chunks,
-                                                  sgm_offset,
-                                                  block_sgm);
+    (inds_d,
+     inds_size,
+     segment_d,
+     segment_sizes_d,
+     block_workload,
+     CUDA_BLOCK_SIZE,
+     block_sgm_index_d);
   cudaThreadSynchronize();
 }
 
@@ -308,7 +299,7 @@ void histogramConstructor(unsigned int block_size,
   int*   hist_d;
   int*   sgm_offset;
   int*   sgm_id_arr;
-    
+
   cudaMalloc(  (void**)&d_in, tot_size * sizeof(T));
   cudaMalloc((void**)&inds_d, tot_size * sizeof(int));
   cudaMalloc((void**)&sorted_inds_d, tot_size * sizeof(int));

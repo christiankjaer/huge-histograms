@@ -2,6 +2,8 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
+#define GPU_HIST_SIZE 8192
+
 // @summary : Computes the histogram indexes based on a normalization of the data
 // @remarks : Assumes all values in the input array to be non-negative
 // @params  : input_arr_d -> the input values
@@ -15,7 +17,37 @@ __global__ void histVals2IndexKernel(T*     input_arr_d,
                                      T        max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < size_arr){
-    hist_inds_d[gid] = (int)(((float)input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
+    hist_inds_d[gid] = (int)((input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
+  }
+}
+
+// @summary : computes the offsets
+__global__ void segmentOffsets(unsigned int* inds_d,
+                               unsigned int  inds_size,
+                               unsigned int* segment_d, // sort of flag array.
+                               unsigned int* segment_offsets_d,
+                               unsigned int  block_workload,
+                               unsigned int  block_size,
+                               unsigned int* block_sgm_index_d){
+
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (gid < inds_size){
+    // assumes inds already partially sorted
+    int this_segment     = inds_d[gid] / CHUNK_SIZE;
+    segment_d[gid] = this_segment;
+    __syncthreads();
+    if (gid == 0){
+      segment_offsets_d[0] = 0;
+    }
+    else{
+     if (this_segment != segment_d[gid-1]){
+       segment_offsets_d[this_segment] = gid;
+     }
+    }
+    if ((gid % block_workload) == 0){
+      block_sgm_index_d[gid/block_workload] = this_segment;
+      printf("%d - %d\n", gid, this_segment);
+    }
   }
 }
 
@@ -151,155 +183,55 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 //   commit to memory
 
 
+__global__ void christiansHistKernel(unsigned int tot_size,
+                                     unsigned int hist_size,
+                                     unsigned int chunk_size,
+                                     unsigned int *sgm_idx,
+                                     unsigned int *sgm_offset,
+                                     unsigned int *inds,
+                                     unsigned int *hist) {
 
-// @summary: for each block, it finds respective segment which it belongs to
+  __shared__ int Hsh[GPU_HIST_SIZE];
 
-__global__ void blockSgmKernel(unsigned int num_chunks,
-                               int*         sgm_offset,
-                               int*          block_sgm){
+  const unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
+  const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
 
-  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  
-  /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
-  /* sgm_offset = [0, 37 , 1000, 201020, ...] */
-  /* if (gid == 0){ */
-  /*   block_sgm[gid] = gid; */
-  /* } else { */
-  if (gid < num_chunks){
-    //forall (int i = 0; i < num_blocks; i++) {
-    int tmp = gid * blockDim.x * CHUNK_SIZE;
-    int j = 0;
-    while (sgm_offset[j] <= tmp){
-      j++;
+  unsigned int curr_sgm = sgm_idx[blockIdx.x];
+  unsigned int num_segments = hist_size / GPU_HIST_SIZE;
+
+  unsigned int sgm_start = sgm_offset[curr_sgm];
+  unsigned int sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
+
+  while (sgm_start < block_end) {
+    // Reset the shared memory.
+
+    for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
+      Hsh[i] = 0;
     }
-    block_sgm[gid] = j;
-    //    }
-  }
-}
 
-__global__ void hennesHistKernel(unsigned int tot_size,
-                                 unsigned int num_chunks,
-                                 unsigned int num_sgms,
-                                 unsigned int *sgm_id_arr,
-                                 unsigned int *sgm_offset_arr,
-                                 unsigned int *inds_arr,
-                                 unsigned int *hist_arr) {
-
-  // Block local histogram
-  __shared__ int Hsh[CHUNK_SIZE];
-
-  // Local idx  (----//----)
-  const unsigned int tidx = threadIdx.x;
-  // Number of threads in the block
-  const unsigned int bdx = blockDim.x;
-  // Block index
-  const unsigned int bid = blockIdx.x;
-  // Global idx (first position of n strides)
-  const unsigned int gidx = bid * CHUNK_SIZE * bdx + tidx;
-
-  // (Global) Start of current block
-  //const unsigned int bid = blockIdx.x * bdx;
-  // (Global) End of current block
-  const unsigned int bnd = gidx + CHUNK_SIZE * bdx;
-
-  // TODO: consider verifying if below includes all elements in chunk (by ceil)..
-  const unsigned int thread_elems = ceil( (float)CHUNK_SIZE / bdx);
-  const unsigned int stride = bdx;
-
-  // Get segment idx at start of block and its global offset
-  unsigned int sgm_id = sgm_id_arr[bdx];
-  unsigned int sgm_start = sgm_offset_arr[sgm_id];
-  // Get last segment element global idx
-  unsigned int sgm_end;
-  if (sgm_id != num_sgms-1)
-    sgm_end = sgm_offset_arr[sgm_id+1];
-  else
-    sgm_end = tot_size;
-
-  // Check for possible conflict
-  bool conflict = false;
-  if (sgm_end < bnd) // TODO: verify this equality not off-by-1 or something..
-    conflict = true;
-
-  /* Zero out local histogram */
-  for (int i = threadIdx.x; i < CHUNK_SIZE; i+=stride) {
-    Hsh[i] = 0;
-  }
-  
-  /***** If conflicts, handle segment splits within block *****/
-  unsigned int local_elem;
-  unsigned int global_elem;
-  if (conflict) {
-    while (sgm_end < bnd) {
-      __syncthreads();
-      // Jump in strides of block size (blockDim)
-      // iterates by stride through the chunk
-      for (int i=threadIdx.x;i<thread_elems;i+=stride) {
-        global_elem = gidx + i; // global data point index
-        // Update local histogram
-        if ((global_elem < tot_size) && (i<CHUNK_SIZE)) {
-          if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-            atomicAdd(&Hsh[inds_arr[i]], 1); // Add to local shared histogram
-        }
-      }
-
-      __syncthreads();
-      // TODO: Fix here
-      // Update global histogram
-      for (int i=threadIdx.x;i<thread_elems;i+=stride) {
-        local_elem = i*stride;
-        global_elem = gidx + i*stride;
-        if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE)) {
-          if ((global_elem>=sgm_start) && (global_elem<sgm_end))
-            break;
-            //atomicAdd(&hist_arr[global_elem], Hsh[local_elem]);
-        }
-      }
-
-      __syncthreads();
-      /* Zero out local histogram */
-      for (int i = threadIdx.x; i < CHUNK_SIZE; i+=stride) {
-        Hsh[i] = 0;
-      }
-
-      // Update start/end of segment
-      sgm_id++;
-      sgm_start = sgm_end;
-      if (sgm_id != num_sgms-1)
-        sgm_end = sgm_offset_arr[sgm_id+1]-1;
-      else
-        sgm_end = tot_size-1;
-    }
-    /***** If no conflict solve for trivial case *****/
-  } else {
     __syncthreads();
-    // Jump in strides
-    for (int i=threadIdx.x;i<CHUNK_SIZE;i+=stride) {
-      // Current local hist element idx
-      //local_elem = lidx + i*stride;
-      global_elem = gidx + i;
-      // Update local histogram
-      if ((global_elem < tot_size) && (local_elem<CHUNK_SIZE))
-        atomicAdd(&Hsh[global_elem], 1); // Add to local shared histogram
-      else
-        break; // no need to do more strides
-    }
-  }
 
-  __syncthreads();
-  // Only relevant for trivial case
-  if (!conflict)
-    // Update global histogram
-    for (int i=threadIdx.x;i<CHUNK_SIZE;i+=stride) {
-      //local_elem = lidx + i;
-      global_elem = gidx + i; // global histogram index
-      if ((global_elem < tot_size) && (i<CHUNK_SIZE)) {
-        break;
-        //atomicAdd(&hist[global_elem], Hsh[i]); // flushes local histogram to global histogram
+    // The sequential loop.
+    unsigned int offset = curr_sgm * GPU_HIST_SIZE;
+    for (unsigned int i = gid; i < min(block_end, sgm_end); i += blockDim.x) {
+      atomicAdd(&Hsh[inds[i] - offset], 1);
+    }
+    __syncthreads();
+
+    // Write back to memory
+    for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
+      if (offset + i < hist_size) {
+        atomicAdd(&hist[offset + i], Hsh[i]);
       }
     }
-}
 
+    if (++curr_sgm == num_segments) break;
+
+    sgm_start = sgm_offset[curr_sgm];
+    sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
+  }
+
+}
 
 // @summary : Computes local histogram of CHUNK_SIZE, and commits to global histogram
 // @remarks : Assumes all index arrays are non-negative values

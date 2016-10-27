@@ -1,5 +1,7 @@
+nvflags=-I../cub-1.5.2
+nvcom=nvcc $(nvflags)
 default:
-	nvcc -Wno-deprecated-gpu-targets -o hist ./histMain.cu
+	$(nvcom) -Wno-deprecated-gpu-targets -o hist ./histMain.cu
 
 compile:
 #nvcc -Wno-deprecated-gpu-targets -o segind ./SegmentIndex.cu
@@ -14,9 +16,14 @@ segind:
 	./segind
 	make -s clean
 
+memalloc:
+	nvcc -Wno-deprecated-gpu-targets -o malloc ./CUDAMALLOC.cu
+	./malloc
+	rm -rf ./malloc
+
 tests:
 	make -s clean
-	nvcc -Wno-deprecated-gpu-targets -o tests  ./tests.cu
+	$(nvcom) -Wno-deprecated-gpu-targets -o tests  ./tests.cu
 	./tests
 	make -s clean
 

@@ -154,7 +154,7 @@ int main (int args, char** argv){
 
   printf("TESTING METADATA COMPUTATIONS\n");
   max_rand_num1  = 500000.0;
-  data_size      = 5000;
+  data_size      = 50000;
   data           = (float*)malloc(data_size * sizeof(float));
   inds_seq       = (int*)malloc(data_size * sizeof(int));
   inds_par       = (int*)malloc(data_size * sizeof(int));
@@ -176,20 +176,26 @@ int main (int args, char** argv){
   update();
 
   // define known meta data about segments
-  int  num_segments   = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
-  int* segment_sizes  = (int*)malloc(num_segments*sizeof(int));
-  int* segment_sizes2 = (int*)malloc(num_segments*sizeof(int));
-  int* segment_sizes_d;
-  int* segment_d;
-  int* inds_d;
+  unsigned int  num_segments   = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
+  int*          segment_sizes  = (int*)malloc(num_segments*sizeof(int));
+  unsigned int* segment_sizes2 = (unsigned int*)malloc(num_segments*sizeof(int));
+  unsigned int* segment_sizes_d;
+  unsigned int* block_sgm_index_d;
+  unsigned int* segment_d;
+  unsigned int* inds_d;
+  int           chunk_size     = ceil((float)data_size/HARDWARE_PARALLELISM);
+  int           block_workload = chunk_size * CUDA_BLOCK_SIZE;
+  int           num_blocks     = ceil((float)data_size / block_workload);
   cudaMalloc((void**)&segment_sizes_d, num_segments * sizeof(int));
+  cudaMalloc((void**)&block_sgm_index_d, num_blocks*sizeof(int));
   cudaMalloc((void**)&segment_d, data_size * sizeof(int));
   cudaMalloc((void**)&inds_d, data_size * sizeof(int));
   cudaMemcpy(inds_d, inds_par, data_size * sizeof(int), cudaMemcpyHostToDevice);
 
   // Compare the results by visual inspection
   segmentSizesSeq(inds_seq, data_size, segment_sizes, num_segments);
-  metaData(data_size, inds_d, segment_sizes_d);
+  metaData(data_size, inds_d, num_segments, block_workload, segment_sizes_d, block_sgm_index_d);
+
   cudaMemcpy(segment_sizes2, segment_sizes_d,
              num_segments * sizeof(int), cudaMemcpyDeviceToHost);
   printf("\n");
@@ -200,6 +206,12 @@ int main (int args, char** argv){
   printf("Segment Offsets\n");
   printIntArraySeq(segment_sizes2, num_segments);
 
+  unsigned int* block_sgm_index = (unsigned int*)malloc(num_blocks*sizeof(int));
+  cudaMemcpy(block_sgm_index, block_sgm_index_d,
+             num_blocks * sizeof(int), cudaMemcpyDeviceToHost);
+
+  printIntArraySeq(block_sgm_index, num_blocks);
+
   // Test the sequential and parallel segmentsize funcitons
   printf("\n");
   printf("%s\n", cudaGetErrorString(cudaGetLastError()));
@@ -209,6 +221,8 @@ int main (int args, char** argv){
   //update();
 
   // Clean up memory
+  free(block_sgm_index);
+  cudaFree(block_sgm_index_d);
   cudaFree(segment_sizes_d);
   cudaFree(segment_d);
   cudaFree(inds_d);

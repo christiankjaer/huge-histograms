@@ -5,8 +5,9 @@
 #include <time.h>
 #include <sys/time.h>
 #include "Kernels.cu.h"
+#include "Host.cu.h"
 
-#define IMG_SIZE 8192*1024
+#define IMG_SIZE 8192*32
 #define HIST_SIZE 8192
 
 long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
@@ -35,14 +36,16 @@ int main() {
   float *data = (float*) malloc(sizeof(float[IMG_SIZE]));
   int *inds = (int*) malloc(sizeof(size_t[IMG_SIZE]));
   int *hist = (int*) malloc(sizeof(unsigned int[HIST_SIZE]));
-
   int *seq_hist = (int*) malloc(sizeof(unsigned int[HIST_SIZE]));
+
   memset(seq_hist, 0, sizeof(unsigned int)*HIST_SIZE);
 
-  int *d_inds, *d_hist;
+  unsigned int *d_inds, *d_hist, *d_sgm_idx, *d_sgm_offset;
 
   cudaMalloc(&d_inds, sizeof(int)*IMG_SIZE);
   cudaMalloc(&d_hist, sizeof(int)*HIST_SIZE);
+  cudaMalloc(&d_sgm_idx, sizeof(int)*32);
+  cudaMalloc(&d_sgm_offset, sizeof(int)*1);
 
   for (size_t i = 0; i < IMG_SIZE; i++) {
     data[i] = ((float)rand()/(float)RAND_MAX) * 256.0f;
@@ -57,9 +60,14 @@ int main() {
 
   cudaMemcpy(d_inds, inds, sizeof(int)*IMG_SIZE, cudaMemcpyHostToDevice);
 
+  metaData(IMG_SIZE, d_inds, 1, d_sgm_offset);
+
   gettimeofday(&t_start, NULL);
 
-  naiveHistKernel<<<1, 1024>>>(IMG_SIZE, d_inds, d_hist);
+  cudaMemset(d_hist, 0, sizeof(int)*HIST_SIZE);
+  cudaMemset(d_sgm_idx, 0, sizeof(int)*32);
+
+  christiansHistKernel<<<32, 256>>>(IMG_SIZE, HIST_SIZE, 32, d_sgm_idx, d_sgm_offset, d_inds, d_hist);
   cudaThreadSynchronize();
 
   gettimeofday(&t_end, NULL);
@@ -70,7 +78,7 @@ int main() {
 
   for (int i = 0; i < HIST_SIZE; i++) {
     if (seq_hist[i] != hist[i]) {
-      printf("INVALID %d != %d\n", seq_hist[i], hist[i]);
+      printf("INVALID %d != %d\n at %d", seq_hist[i], hist[i], i);
       break;
     }
   }
