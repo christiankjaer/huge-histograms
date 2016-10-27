@@ -11,13 +11,41 @@
 //          : size_arr    -> the size of both arrays
 //          : the largest input element
 template <class T>
-__global__ void histVals2IndexKernel(float* input_arr_d,
+__global__ void histVals2IndexKernel(T*     input_arr_d,
                                      int*   hist_inds_d,
-                                     int    size_arr,
-                                     float  max_input){
+                                     int       size_arr,
+                                     T        max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < size_arr){
-    hist_inds_d[gid] = (int)((input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
+    hist_inds_d[gid] = (int)(((float)input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
+  }
+}
+
+// @summary : computes the offsets
+__global__ void segmentOffsets(int* inds_d,
+                               int  inds_size,
+                               int* segment_d, // sort of flag array.
+                               int* segment_offsets_d,
+                               int  num_segments){
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (gid < inds_size){
+    int this_segment_max = CHUNK_SIZE;
+    int this_segment     = 0;
+    // TODO : find a smart formula for this.
+    while (inds_d[gid] >= this_segment_max){
+      this_segment_max += CHUNK_SIZE;
+      this_segment++;
+    }
+    segment_d[gid] = this_segment;
+    __syncthreads();
+    if (gid == 0){
+      segment_offsets_d[0] = 0;
+    }
+    else{
+     if (this_segment != segment_d[gid-1]){
+       segment_offsets_d[this_segment] = gid;
+     }
+    }
   }
 }
 
@@ -50,8 +78,8 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
       hist[i*bdx + gid] = Hsh[i*bdx + gid];
     }
   }
-
 }
+
 
 
 /* Global segment counter, initilize before running segmentedHistKernel */
@@ -131,18 +159,18 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 // @summary: for each block, it finds respective segment which it belongs to
 
 __global__ void blockSgmKernel(unsigned int block_size,
-                               unsigned int num_blocks,
+                               unsigned int num_chunks,
                                int*         sgm_offset,
                                int*          block_sgm){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-
+  
   /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
   /* sgm_offset = [0, 37 , 1000, 201020, ...] */
 
-  if (gid < num_blocks){
+  if (gid < num_chunks){
     //forall (int i = 0; i < num_blocks; i++) {
-    int tmp = gid * block_size;
+    int tmp = gid * block_size * CHUNK_SIZE;
     int j = 0;
     while (sgm_offset[j] >= tmp){
       j++;
