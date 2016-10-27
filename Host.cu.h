@@ -274,7 +274,7 @@ void metaData(unsigned int inds_size,
 
 // @summary: finds index for segment offset, for each block
 void blockSgm (unsigned int block_size,
-               unsigned int tot_size,
+               unsigned int   tot_size,
                int*         sgm_offset,
                int*          block_sgm){
   const unsigned int num_chunks = ceil((float) tot_size / (CHUNK_SIZE*block_size)); // number of chunks to be worked on
