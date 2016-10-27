@@ -164,7 +164,7 @@ __global__ void blockSgmKernel(unsigned int block_size,
                                int*          block_sgm){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  
+
   /* block_sgm = [0, 0, 0, 1, 2, 4, ...] */
   /* sgm_offset = [0, 37 , 1000, 201020, ...] */
 
