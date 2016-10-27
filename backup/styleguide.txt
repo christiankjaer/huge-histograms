@@ -1,0 +1,2 @@
+Function names : camelCase.
+Variable names : with_underscore.

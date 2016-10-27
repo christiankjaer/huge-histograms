@@ -41,28 +41,28 @@ template<class T>
 T maximumElement(T* d_in, int arr_size){
 
   // Determine temporary device storage requirements
-  T d_max;
-  //T  h_max;
+  T* d_max;
+  T  h_max;
   cudaMalloc((void**)&d_max, sizeof(T));
   void*    d_temp_storage     = NULL;
   size_t   temp_storage_bytes = 0;
 
   // Dummy call, to set temp_storage values.
-  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, &d_max, arr_size);
+  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size);
   cudaMalloc(&d_temp_storage, temp_storage_bytes);
 
   // Let Cub handle the reduction
-  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, &d_max, arr_size);
+  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size);
 
   // Copy back the reduced element
-  
-  //cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost);
-  
+  cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost);
+
   // Clean up memory
   cudaFree(d_temp_storage);
-  //cudaFree(d_max);
-  return d_max;
+  cudaFree(d_max);
+  return h_max;
 }
+
 
 // @summary : Normalizes the dateset, and computes histogram indexes.
 // @remarks : Asserts the value and index arrays to have the same sizes.
@@ -289,6 +289,7 @@ void blockSgm (unsigned int  block_size,
                                              sgm_offset,
                                              block_sgm);
   cudaThreadSynchronize();
+
 }
 
 // @summary: Wrapper for histogram kernel
