@@ -25,24 +25,25 @@ __global__ void histVals2IndexKernel(float* input_arr_d,
 __global__ void segmentOffsets(unsigned int* inds_d,
                                unsigned int  inds_size,
                                unsigned int* segment_d, // sort of flag array.
-                               unsigned int* segment_offsets_d){
+                               unsigned int* segment_offsets_d,
+                               unsigned int  block_size,
+                               unsigned int* block_sgm_index_d){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
-    int this_segment_max = CHUNK_SIZE;
-    int this_segment     = 0;
-    // TODO : find a smart formula for this.
-    while (inds_d[gid] >= this_segment_max){
-      this_segment_max += CHUNK_SIZE;
-      this_segment++;
-    }
+    // assumes inds already partially sorted
+    int this_segment     = inds_d[gid] / CHUNK_SIZE;
     segment_d[gid] = this_segment;
     __syncthreads();
     if (gid == 0){
       segment_offsets_d[0] = 0;
+      block_sgm_index_d[0] = 0;
     }
     else{
      if (this_segment != segment_d[gid-1]){
        segment_offsets_d[this_segment] = gid;
+     }
+     if (gid % (block_size * CHUNK_SIZE) == 0){
+       block_sgm_index_d[gid/(block_size * CHUNK_SIZE)] = this_segment;
      }
     }
   }
@@ -163,6 +164,7 @@ __global__ void blockSgmKernel(unsigned int  block_size,
                                unsigned int* block_sgm){
 
    const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+   int num_blocks = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
 
    /* block_sgm = [0, 0, 0, ...] */
    /* sgm_offset = [0, 37 , 1000, 201020, ...] */
