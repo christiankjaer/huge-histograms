@@ -41,28 +41,28 @@ template<class T>
 T maximumElement(T* d_in, int arr_size){
 
   // Determine temporary device storage requirements
-  T d_max;
-  //T  h_max;
+  T* d_max;
+  T  h_max;
   cudaMalloc((void**)&d_max, sizeof(T));
   void*    d_temp_storage     = NULL;
   size_t   temp_storage_bytes = 0;
 
   // Dummy call, to set temp_storage values.
-  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, &d_max, arr_size);
+  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size);
   cudaMalloc(&d_temp_storage, temp_storage_bytes);
 
   // Let Cub handle the reduction
-  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, &d_max, arr_size);
+  cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size);
 
   // Copy back the reduced element
-  
-  //cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost);
-  
+  cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost);
+
   // Clean up memory
   cudaFree(d_temp_storage);
-  //cudaFree(d_max);
-  return d_max;
+  cudaFree(d_max);
+  return h_max;
 }
+
 
 // @summary : Normalizes the dateset, and computes histogram indexes.
 // @remarks : Asserts the value and index arrays to have the same sizes.
@@ -257,15 +257,28 @@ void naiveHist(T*      h_array,
 
 }
 
-// @summary: finds index for segment offset, for each block
+// @summary : for now, just computes segment_sizes.
+void metaData(unsigned int inds_size,
+              int*         inds_d,
+              int*         segment_d,
+              int*         segment_sizes_d,
+              int          num_segments
+              ){
+  int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
+  cudaMemset(segment_d, 0,  inds_size * sizeof(int));
+  cudaMemset(segment_sizes_d, 0,  num_segments * sizeof(int));
+  segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
+    (inds_d, inds_size, segment_d, segment_sizes_d, num_segments);
+  cudaThreadSynchronize();
+}
 
+// @summary: finds index for segment offset, for each block
 void blockSgm (unsigned int block_size,
-               unsigned int   tot_size,
+               unsigned int tot_size,
                int*         sgm_offset,
                int*          block_sgm){
   const unsigned int num_chunks = ceil((float) tot_size / (CHUNK_SIZE*block_size)); // number of chunks to be worked on
   const unsigned int num_blocks = ceil(num_chunks/block_size); // Number of blocks to construct block segment array
-
 
   // executes kernel
   blockSgmKernel<<<num_blocks, block_size>>>(block_size,
