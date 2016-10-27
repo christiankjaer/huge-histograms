@@ -36,11 +36,8 @@ int main() {
   float *data = (float*) malloc(sizeof(float[IMG_SIZE]));
   int *inds = (int*) malloc(sizeof(size_t[IMG_SIZE]));
   int *hist = (int*) malloc(sizeof(unsigned int[HIST_SIZE]));
-  unsigned int sgm_idx[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-  unsigned int sgm_offset[] = {0, 8192*32};
-  unsigned int num_sgms = 1;
-
   int *seq_hist = (int*) malloc(sizeof(unsigned int[HIST_SIZE]));
+
   memset(seq_hist, 0, sizeof(unsigned int)*HIST_SIZE);
 
   unsigned int *d_inds, *d_hist, *d_sgm_idx, *d_sgm_offset;
@@ -48,7 +45,7 @@ int main() {
   cudaMalloc(&d_inds, sizeof(int)*IMG_SIZE);
   cudaMalloc(&d_hist, sizeof(int)*HIST_SIZE);
   cudaMalloc(&d_sgm_idx, sizeof(int)*32);
-  cudaMalloc(&d_sgm_offset, sizeof(int)*2);
+  cudaMalloc(&d_sgm_offset, sizeof(int)*1);
 
   for (size_t i = 0; i < IMG_SIZE; i++) {
     data[i] = ((float)rand()/(float)RAND_MAX) * 256.0f;
@@ -62,14 +59,15 @@ int main() {
   printf("Histogram calculated in %d µs\n", elapsed);
 
   cudaMemcpy(d_inds, inds, sizeof(int)*IMG_SIZE, cudaMemcpyHostToDevice);
-  cudaMemcpy(d_sgm_idx, sgm_idx, sizeof(int)*32, cudaMemcpyHostToDevice);
-  cudaMemcpy(d_sgm_offset, sgm_offset, sizeof(int)*2, cudaMemcpyHostToDevice);
+
+  metaData(IMG_SIZE, d_inds, 1, d_sgm_offset);
 
   gettimeofday(&t_start, NULL);
 
   cudaMemset(d_hist, 0, sizeof(int)*HIST_SIZE);
+  cudaMemset(d_sgm_idx, 0, sizeof(int)*32);
 
-  christiansHistKernel<<<32, 256>>>(IMG_SIZE, 32, 1, d_sgm_idx, d_sgm_offset, d_inds, d_hist);
+  christiansHistKernel<<<32, 256>>>(IMG_SIZE, HIST_SIZE, 32, d_sgm_idx, d_sgm_offset, d_inds, d_hist);
   cudaThreadSynchronize();
 
   gettimeofday(&t_end, NULL);

@@ -22,11 +22,10 @@ __global__ void histVals2IndexKernel(T*     input_arr_d,
 }
 
 // @summary : computes the offsets
-__global__ void segmentOffsets(int* inds_d,
-                               int  inds_size,
-                               int* segment_d, // sort of flag array.
-                               int* segment_offsets_d,
-                               int  num_segments){
+__global__ void segmentOffsets(unsigned int* inds_d,
+                               unsigned int  inds_size,
+                               unsigned int* segment_d, // sort of flag array.
+                               unsigned int* segment_offsets_d){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
     int this_segment_max = CHUNK_SIZE;
@@ -158,10 +157,10 @@ __global__ void segmentedHistKernel(unsigned int tot_size,
 
 // @summary: for each block, it finds respective segment which it belongs to
 
-__global__ void blockSgmKernel(unsigned int block_size,
-                               unsigned int num_chunks,
-                               int*         sgm_offset,
-                               int*          block_sgm){
+__global__ void blockSgmKernel(unsigned int  block_size,
+                               unsigned int  num_chunks,
+                               unsigned int* sgm_offset,
+                               unsigned int* block_sgm){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -180,8 +179,8 @@ __global__ void blockSgmKernel(unsigned int block_size,
 }
 
 __global__ void christiansHistKernel(unsigned int tot_size,
+                                     unsigned int hist_size,
                                      unsigned int chunk_size,
-                                     unsigned int num_sgms,
                                      unsigned int *sgm_idx,
                                      unsigned int *sgm_offset,
                                      unsigned int *inds,
@@ -194,9 +193,10 @@ __global__ void christiansHistKernel(unsigned int tot_size,
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
   
   unsigned int curr_sgm = sgm_idx[blockIdx.x];
+  unsigned int num_segments = hist_size / GPU_HIST_SIZE;
 
   unsigned int sgm_start = sgm_offset[curr_sgm];
-  unsigned int sgm_end = (curr_sgm >= num_sgms - 1) ? sgm_offset[curr_sgm + 1] : tot_size;
+  unsigned int sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
 
 
   while (sgm_start < block_end) {
@@ -210,21 +210,22 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 
     // The sequential loop.
     unsigned int offset = curr_sgm * GPU_HIST_SIZE;
-    for (unsigned int i = gid; i < block_end; i += blockDim.x) {
-      if (i < sgm_end) {
-        atomicAdd(&Hsh[inds[i] - offset], 1);
-      }
+    for (unsigned int i = gid; i < min(block_end, sgm_end); i += blockDim.x) {
+      atomicAdd(&Hsh[inds[i] - offset], 1);
     }
     __syncthreads();
     
     // Write back to memory
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
-      atomicAdd(&hist[offset + i], Hsh[i]);
+      if (offset + i < hist_size) {
+        atomicAdd(&hist[offset + i], Hsh[i]);
+      }
     }
 
-    curr_sgm++;
+    if (++curr_sgm == num_segments) break;
+
     sgm_start = sgm_offset[curr_sgm];
-    sgm_end = (curr_sgm >= num_sgms - 1) ? sgm_offset[curr_sgm + 1] : tot_size;
+    sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
   }
 
 }
