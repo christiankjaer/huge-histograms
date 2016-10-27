@@ -154,7 +154,7 @@ int main (int args, char** argv){
 
   printf("TESTING METADATA COMPUTATIONS\n");
   max_rand_num1  = 500000.0;
-  data_size      = 5000;
+  data_size      = 5000000;
   data           = (float*)malloc(data_size * sizeof(float));
   inds_seq       = (int*)malloc(data_size * sizeof(int));
   inds_par       = (int*)malloc(data_size * sizeof(int));

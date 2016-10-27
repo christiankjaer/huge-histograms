@@ -55,9 +55,9 @@ T maximumElement(T* d_in, int arr_size){
   cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, &d_max, arr_size);
 
   // Copy back the reduced element
-  
+
   //cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost);
-  
+
   // Clean up memory
   cudaFree(d_temp_storage);
   //cudaFree(d_max);
@@ -264,7 +264,7 @@ void metaData(unsigned int inds_size,
               int*         segment_sizes_d,
               int          num_segments
               ){
-  int num_blocks = ceil(inds_size / CUDA_BLOCK_SIZE);
+  int num_blocks = ceil(inds_size / (float)CUDA_BLOCK_SIZE);
   cudaMemset(segment_d, 0,  inds_size * sizeof(int));
   cudaMemset(segment_sizes_d, 0,  num_segments * sizeof(int));
   segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
