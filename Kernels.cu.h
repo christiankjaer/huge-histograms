@@ -28,6 +28,7 @@ __global__ void segmentOffsets(unsigned int* inds_d,
                                unsigned int* segment_offsets_d,
                                unsigned int  block_size,
                                unsigned int* block_sgm_index_d){
+
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
     // assumes inds already partially sorted
