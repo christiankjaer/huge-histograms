@@ -2,6 +2,12 @@
 
 #ifndef ARRAY_LIB
 #include "../setup.cu.h"
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <map>
+#include <random>
+#include <cmath>
 
 // @summary : maps data to histogram indexes.
 // @params  : input_arr -> data array
@@ -51,6 +57,17 @@ void randArrSeq(float* array, int array_length, float max_rand_num){
   }
 }
 
+// @summary : fills an array with normal distirbuted floats.
+// @remarks : dont free the array after ! (something is wrong).
+void normArrSeq(float* array, int array_length, float max_rand_num){
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::normal_distribution<> d(max_rand_num/2, max_rand_num/4);
+  for (int i = 0; i < array_length; i++){
+    array[i] = (float)min(max_rand_num, max(0.0, (std::round(d(gen)))));
+  }
+}
+
 // @summary : fills an array with zeroes
 template<class T>
 void zeroArrSeq(T* array, int array_length){
@@ -80,7 +97,8 @@ __inline__ void makeKeysSeq(int* A, int* K, int N, int MASK){
 
 // @summary : prints an array to terminal for visual inspection
 // @remarks : prints only 10 elements pr. line
-void printIntArraySeq(int* array, int array_length){
+template<class T>
+void printIntArraySeq(T* array, int array_length){
   printf("[");
   int j = 1;
   for (int i = 0; i < array_length; i++){

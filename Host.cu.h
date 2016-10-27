@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <../cub/cub.cuh>
+#include <cub/cub.cuh>
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
@@ -270,7 +270,7 @@ void metaData(unsigned int  inds_size,
   cudaMalloc(&segment_d, sizeof(unsigned int)*inds_size);
   cudaMemset(segment_d, 0, inds_size * sizeof(unsigned int));
   cudaMemset(segment_sizes_d, 0, num_segments * sizeof(unsigned int));
-  segmentOffsets<<<num_blocks, CUDA_BLOCK_SIZE>>>
+  segmentMetaData<<<num_blocks, CUDA_BLOCK_SIZE>>>
     (inds_d,
      inds_size,
      segment_d,
@@ -321,8 +321,8 @@ void histogramConstructor(unsigned int block_size,
 
   // Find segment offset and segment for which a block starts in
   // Meta data computes both
-  metaData(tot_size, sorted_inds_d, sgm_offset);
-  
+  //metaData(tot_size, sorted_inds_d, sgm_offset);
+
 
   // Allocates histogram on device
   cudaMalloc((void**)&hist_d, HISTOGRAM_SIZE*sizeof(int));
@@ -336,7 +336,7 @@ void histogramConstructor(unsigned int block_size,
                                                 sorted_inds_d,      // histogram indexes
                                                 hist_d);     // global histogram
   cudaThreadSynchronize();
-  
+
   // copying final histogram back to host from device
   cudaMemcpy(hist_h, hist_d, HISTOGRAM_SIZE*sizeof(int), cudaMemcpyDeviceToHost);
 

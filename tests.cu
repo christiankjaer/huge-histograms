@@ -183,7 +183,7 @@ int main (int args, char** argv){
   unsigned int* block_sgm_index_d;
   unsigned int* segment_d;
   unsigned int* inds_d;
-  int           chunk_size     = ceil((float)data_size/HARDWARE_PARALLELISM);
+  unsigned int  chunk_size     = ceil((float)data_size/HARDWARE_PARALLELISM);
   int           block_workload = chunk_size * CUDA_BLOCK_SIZE;
   int           num_blocks     = ceil((float)data_size / block_workload);
   cudaMalloc((void**)&segment_sizes_d, num_segments * sizeof(int));
@@ -216,12 +216,9 @@ int main (int args, char** argv){
   printf("\n");
   printf("%s\n", cudaGetErrorString(cudaGetLastError()));
 
-
-
   //update();
 
   // Clean up memory
-  free(block_sgm_index);
   cudaFree(block_sgm_index_d);
   cudaFree(segment_sizes_d);
   cudaFree(segment_d);
@@ -229,6 +226,7 @@ int main (int args, char** argv){
   cudaFree(data_d);
   free(segment_sizes);
   free(segment_sizes2);
+  free(block_sgm_index);
   free(inds_par);
   free(inds_seq);
   free(inds_tmp);
