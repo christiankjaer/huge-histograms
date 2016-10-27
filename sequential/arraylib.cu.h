@@ -14,7 +14,7 @@
 //            hist_inds -> target array
 //            size_arr  -> input array size
 //            size_hist -> the histogram size
-void arr2HistIdxSeq(float* input_arr, int* hist_inds,
+void arr2HistIdxSeq(float* input_arr, unsigned int* hist_inds,
                     int size_arr, float max_input) {
   for (int i=0; i < size_arr; i++) {
     hist_inds[i] = (int)((input_arr[i]/max_input)*(float)HISTOGRAM_SIZE);
@@ -23,7 +23,8 @@ void arr2HistIdxSeq(float* input_arr, int* hist_inds,
 
 // @summary : counts the number of segments for the index array
 // @returns : the array of segment sizes
-void segmentSizesSeq(int* inds, int inds_size, int* segment_sizes, int num_segments){
+void segmentSizesSeq(unsigned int* inds, int inds_size, 
+                     unsigned int* segment_sizes, int num_segments){
   int this_segment_max = CHUNK_SIZE;
   int this_segment     = 0;
   // zero segment_sizes

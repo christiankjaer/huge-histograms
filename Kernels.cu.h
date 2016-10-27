@@ -11,10 +11,10 @@
 //          : size_arr    -> the size of both arrays
 //          : the largest input element
 template <class T>
-__global__ void histVals2IndexKernel(T*     input_arr_d,
-                                     int*   hist_inds_d,
-                                     int       size_arr,
-                                     T        max_input){
+__global__ void histVals2IndexKernel(T*            input_arr_d,
+                                     unsigned int* hist_inds_d,
+                                     int              size_arr,
+                                     T               max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < size_arr){
     hist_inds_d[gid] = (int)((input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
@@ -196,7 +196,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
 
   unsigned int curr_sgm = sgm_idx[blockIdx.x];
-  unsigned int num_segments = hist_size / GPU_HIST_SIZE;
+  unsigned int num_segments = ceil((float)hist_size / GPU_HIST_SIZE);
 
   unsigned int sgm_start = sgm_offset[curr_sgm];
   unsigned int sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
@@ -245,10 +245,10 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 __global__ void grymersHistKernel(unsigned int tot_size,
                                   unsigned int num_chunks,
                                   unsigned int num_sgms,
-                                  int *sgm_id_arr,
-                                  int *sgm_offset_arr,
-                                  int *inds_arr,
-                                  int *hist_arr) {
+                                  unsigned int *sgm_id_arr,
+                                  unsigned int *sgm_offset_arr,
+                                  unsigned int *inds_arr,
+                                  unsigned int *hist_arr) {
   
   // Block local histogram
   __shared__ int Hsh[CHUNK_SIZE];
@@ -267,7 +267,7 @@ __global__ void grymersHistKernel(unsigned int tot_size,
   const unsigned int bnd = gidx + wload;
 
   // Get segment idx at start of block and its global offset
-  unsigned int sgm_id = sgm_id_arr[bdx];
+  unsigned int sgm_id    = sgm_id_arr[bdx];
   unsigned int sgm_start = sgm_offset_arr[sgm_id];
   // Get last segment element global idx
   unsigned int sgm_end;
@@ -290,22 +290,22 @@ __global__ void grymersHistKernel(unsigned int tot_size,
     __syncthreads();
     // Jump in strides of block size (blockDim)
     // iterates by stride through the CHUNK_SIZE*blockDim.x elements
-    for (int i=tidx;i<wload;i+=bdx) {
-      global_elem = gidx + i; // global data point index
-      if (global_elem < tot_size) {
+    for (int i=gidx;i<gidx+wload;i+=bdx) {
+      //global_elem = gidx + i; // global data point index
+      if (i < tot_size) {
         //Check if we are within a segment
-        if ((global_elem>=sgm_start) && (global_elem<sgm_end)) 
+        if ((i>=sgm_start) && (i<sgm_end)) 
           // global_index % CHUNK_SIZE = local_hist_id
-          atomicAdd(&Hsh[inds_arr[global_elem]%CHUNK_SIZE], 1); // Atomic add for local histogram
+          atomicAdd(&Hsh[inds_arr[i]%CHUNK_SIZE], 1); // Atomic add for local histogram
       }
     }
     
     __syncthreads();
     // Update global histogram
-    for (int i=threadIdx.x;i<CHUNK_SIZE;i+=bdx) {
-      global_elem = sgm_id_arr[sgm_id]*CHUNK_SIZE + i; // Global histogram index
+    for (int i=tidx;i<CHUNK_SIZE;i+=bdx) {
+      global_elem = sgm_id*CHUNK_SIZE + i; // Global histogram index
       // update histogram if we are within segment, and still inside global histogram size
-      if (global_elem<sgm_id*CHUNK_SIZE && global_elem < sgm_end)
+      if (global_elem>=sgm_id*CHUNK_SIZE && global_elem < sgm_end)
         atomicAdd(&hist_arr[global_elem], Hsh[i]); // Atomic update for global histogram
     }
     

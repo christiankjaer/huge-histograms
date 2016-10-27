@@ -31,7 +31,7 @@ bool myAssert(bool test){
 
 // @test : asserts the inds array has been partially sorted.
 //         in segments of values varying with at most CHUNK_SIZE
-void sortTest(int* inds, int data_size){
+void sortTest(unsigned int* inds, int data_size){
   int _min = 0;
   int _max = CHUNK_SIZE;
   for (int i = 0; i < data_size; i++){
@@ -68,13 +68,13 @@ int main (int args, char** argv){
   printf("TESTING RADIX SORT\n");
 
   // declare initial values
-  int    data_size     = 1024*16;
-  float  max_rand_num1 = 30000.0;
+  int    data_size     = 10; //1024*16;
+  float  max_rand_num1 = 5.0;
   float  max_rand_num2 = 0.0;
   float* data          = (float*)malloc(data_size * sizeof(float));
   float* data_d;
-  int*   inds_seq      = (int*)malloc(data_size * sizeof(int));
-  int*   inds_par      = (int*)malloc(data_size * sizeof(int));
+  unsigned int* inds_seq = (unsigned int*)malloc(data_size * sizeof(int));
+  unsigned int* inds_par = (unsigned int*)malloc(data_size * sizeof(int));
 
   // fill the data array with random values
   randArrSeq(data, data_size, max_rand_num1);
@@ -102,11 +102,11 @@ int main (int args, char** argv){
   update();
 
   // ensure that the two index arrays match
-  compareTest<int>(inds_par, inds_seq, data_size);
+  compareTest<unsigned int>(inds_par, inds_seq, data_size);
   update();
 
   // clean up memory
-  free(data);
+  //free(data);
   cudaFree(data_d);
   free(inds_seq);
   free(inds_par);
@@ -153,12 +153,12 @@ int main (int args, char** argv){
   printf("%s\n", cudaGetErrorString(cudaGetLastError()));
 
   printf("TESTING METADATA COMPUTATIONS\n");
-  max_rand_num1  = 500000.0;
-  data_size      = 50000;
+  // max_rand_num1  = 500000.0;
+  // data_size      = 50000;
   data           = (float*)malloc(data_size * sizeof(float));
-  inds_seq       = (int*)malloc(data_size * sizeof(int));
-  inds_par       = (int*)malloc(data_size * sizeof(int));
-  int* inds_tmp  = (int*)malloc(data_size * sizeof(int));
+  inds_seq       = (unsigned int*)malloc(data_size * sizeof(int));
+  inds_par       = (unsigned int*)malloc(data_size * sizeof(int));
+  unsigned int* inds_tmp  = (unsigned int*)malloc(data_size * sizeof(int));
 
   // generate test data.
   randArrSeq(data, data_size, max_rand_num1);
@@ -172,20 +172,20 @@ int main (int args, char** argv){
   update();
   sortTest(inds_par, data_size);
   update();
-  compareTest<int>(inds_par, inds_seq, data_size);
+  compareTest<unsigned int>(inds_par, inds_seq, data_size);
   update();
 
   // define known meta data about segments
   unsigned int  num_segments   = ceil(HISTOGRAM_SIZE / (float)CHUNK_SIZE);
-  int*          segment_sizes  = (int*)malloc(num_segments*sizeof(int));
+  unsigned int* segment_sizes  = (unsigned int*)malloc(num_segments*sizeof(int));
   unsigned int* segment_sizes2 = (unsigned int*)malloc(num_segments*sizeof(int));
+  int           chunk_size     = ceil((float)data_size/HARDWARE_PARALLELISM);
+  int           block_workload = chunk_size * CUDA_BLOCK_SIZE;
+  int           num_blocks     = ceil((float)data_size / block_workload);
   unsigned int* segment_sizes_d;
   unsigned int* block_sgm_index_d;
   unsigned int* segment_d;
   unsigned int* inds_d;
-  unsigned int  chunk_size     = ceil((float)data_size/HARDWARE_PARALLELISM);
-  int           block_workload = chunk_size * CUDA_BLOCK_SIZE;
-  int           num_blocks     = ceil((float)data_size / block_workload);
   cudaMalloc((void**)&segment_sizes_d, num_segments * sizeof(int));
   cudaMalloc((void**)&block_sgm_index_d, num_blocks*sizeof(int));
   cudaMalloc((void**)&segment_d, data_size * sizeof(int));
@@ -202,15 +202,16 @@ int main (int args, char** argv){
 
   // TODO : Automate this comparison.
   printf("Segment Sizes\n");
-  printIntArraySeq(segment_sizes , num_segments);
+  printIntArraySeq((int *) segment_sizes , num_segments);
   printf("Segment Offsets\n");
-  printIntArraySeq(segment_sizes2, num_segments);
+  printIntArraySeq((int *) segment_sizes2, num_segments);
 
   unsigned int* block_sgm_index = (unsigned int*)malloc(num_blocks*sizeof(int));
   cudaMemcpy(block_sgm_index, block_sgm_index_d,
              num_blocks * sizeof(int), cudaMemcpyDeviceToHost);
 
-  printIntArraySeq(block_sgm_index, num_blocks);
+  printf("Block segment id\n");
+  printIntArraySeq((int *)block_sgm_index, num_blocks);
 
   // Test the sequential and parallel segmentsize funcitons
   printf("\n");
@@ -230,8 +231,14 @@ int main (int args, char** argv){
   free(inds_par);
   free(inds_seq);
   free(inds_tmp);
-  free(data);
 
+  unsigned int* hist_h = (unsigned int*)malloc(HISTOGRAM_SIZE*sizeof(int));
+  
+  histogramConstructor<float>(data_size, data, hist_h);
+
+  printIntArraySeq((int *) hist_h, HISTOGRAM_SIZE);
+  free(hist_h);
+  free(data);
 
   printf("TEST RESULTS\nPASSED: %d FAILED: %d.\n", passed, failed);
   return 0;
