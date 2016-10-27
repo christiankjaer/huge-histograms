@@ -74,7 +74,7 @@ T maximumElement(T* d_in, int arr_size){
 template<class T>
 void histVals2IndexDevice (unsigned int    arr_size,
                            T*                vals_d,
-                           int*              inds_d){
+                           unsigned int*     inds_d){
 
   // Allocate device memory
   /* T*   vals_d; */
@@ -113,11 +113,11 @@ void histVals2IndexDevice (unsigned int    arr_size,
 template<class T>
 void histVals2Index (unsigned int    arr_size,
                      T*                vals_h,
-                     int*              inds_h){
+                     unsigned int*     inds_h){
 
   // Allocate device memory
   T*   vals_d;
-  int* inds_d;
+  unsigned int* inds_d;
   cudaMalloc((void**)&vals_d, arr_size * sizeof(float));
   cudaMalloc((void**)&inds_d, arr_size * sizeof(int));
   cudaMemcpy(vals_d, vals_h, arr_size*sizeof(T), cudaMemcpyHostToDevice);
@@ -142,9 +142,9 @@ void histVals2Index (unsigned int    arr_size,
 }
 
 // @summary : partially sortes an index array in chunk size bounded segments
-void radixSortDevice(int* unsorted_d,
-                     int* sorted_d,
-                     int  array_length){
+void radixSortDevice(unsigned int* unsorted_d,
+                     unsigned int* sorted_d,
+                     unsigned int  array_length){
 
   // Allocate device memory
   /* int* d_keys_in; */
@@ -193,8 +193,8 @@ void radixSortDevice(int* unsorted_d,
 }
 
 // @summary : partially sortes an index array in chunk size bounded segments
-void radixSort(int* array_to_be_sorted,
-               int  array_length){
+void radixSort(unsigned int* array_to_be_sorted,
+               unsigned int  array_length){
 
   // Allocate device memory
   int* d_keys_in;
@@ -283,26 +283,25 @@ void metaData(unsigned int  inds_size,
 
 // @summary: Wrapper for histogram kernel
 template <class T>
-void histogramConstructor(unsigned int block_size,
-                          unsigned int   tot_size,
+void histogramConstructor(unsigned int   tot_size,
                           T*              input_h,
-                          int*             hist_h){
-  const unsigned int num_blocks   = ceil((float)tot_size/(CHUNK_SIZE*CUDA_BLOCK_SIZE));
-  const unsigned int num_chunks   = ceil((float)tot_size/(CHUNK_SIZE));
-  const unsigned int num_segments = ceil((float)HISTOGRAM_SIZE/CHUNK_SIZE);
+                          unsigned int*    hist_h){
+  const unsigned int thread_workload   = ceil((float)tot_size/HARDWARE_PARALLELISM);
+  const unsigned int block_workload    = ceil((float)CUDA_BLOCK_SIZE*thread_workload);
+  const unsigned int num_blocks        = ceil((float)tot_size/block_workload);
+  const unsigned int num_segments      = ceil((float)HISTOGRAM_SIZE/CHUNK_SIZE);
   //const unsigned int work_size  = ceil((float)tot_size/(CHUNK_SIZE*block_size));
 
   /* device variables */
-  T*       d_in;
-  int*   inds_d;
-  int*   sorted_inds_d;
-  int*   hist_d;
-  int*   sgm_offset;
-  int*   sgm_id_arr;
+  T*                       d_in;
+  unsigned int*          inds_d;
+  unsigned int*   sorted_inds_d;
+  unsigned int*          hist_d;
+  unsigned int*      sgm_offset;
+  unsigned int*    block_sgm_id;
 
   cudaMalloc(  (void**)&d_in, tot_size * sizeof(T));
   cudaMalloc((void**)&inds_d, tot_size * sizeof(int));
-  cudaMalloc((void**)&sorted_inds_d, tot_size * sizeof(int));
   cudaMemcpy(d_in, input_h, tot_size * sizeof(T), cudaMemcpyHostToDevice);
 
   // converts values to histogram indices
@@ -311,30 +310,45 @@ void histogramConstructor(unsigned int block_size,
   // Free input array after converting to histogram indices
   cudaFree(d_in);
 
+  cudaMalloc((void**)&sorted_inds_d, tot_size * sizeof(int));
   // Sorts histogram index array
   radixSortDevice(inds_d, sorted_inds_d, tot_size);
-  //cudaFree(inds_d);
+
+  //free random hist inds;
+  cudaFree(inds_d);
 
   // allocate arrays to contain segment offset, and block segment index
   cudaMalloc((void**)&sgm_offset, num_segments*sizeof(int));
-  cudaMalloc((void**)&sgm_id_arr, num_chunks*sizeof(T));
+  cudaMalloc((void**)&block_sgm_id, num_blocks  *sizeof(int));
 
   // Find segment offset and segment for which a block starts in
   // Meta data computes both
-  metaData(tot_size, sorted_inds_d, sgm_offset);
-  
+  metaData(tot_size, 
+           sorted_inds_d, 
+           num_segments, 
+           block_workload, 
+           sgm_offset, 
+           block_sgm_id);
 
   // Allocates histogram on device
   cudaMalloc((void**)&hist_d, HISTOGRAM_SIZE*sizeof(int));
 
   // Constructs histogram, only works on histograms big enough to fit on GPU memory
-  grymersHistKernel<<<num_blocks, block_size>>>(tot_size,    // data input size
-                                                num_chunks,  // number of workloads
-                                                HISTOGRAM_SIZE/CHUNK_SIZE, // number of segments
-                                                sgm_id_arr,  // Workload segment index
-                                                sgm_offset,  // Segment offset array
-                                                sorted_inds_d,      // histogram indexes
-                                                hist_d);     // global histogram
+
+  christiansHistKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>(tot_size,
+                                                        HISTOGRAM_SIZE,
+                                                        thread_workload,
+                                                        block_sgm_id,
+                                                        sgm_offset,
+                                                        sorted_inds_d,
+                                                        hist_d);
+  /* grymersHistKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>(tot_size,       // data input size */
+  /*                                                    block_workload, // number of workloads */
+  /*                                                    num_segments,   // number of segments */
+  /*                                                    block_sgm_id,   // Workload segment index */
+  /*                                                    sgm_offset,     // Segment offset array */
+  /*                                                    sorted_inds_d,  // histogram indexes */
+  /*                                                    hist_d);        // global histogram */
   cudaThreadSynchronize();
   
   // copying final histogram back to host from device
@@ -344,7 +358,7 @@ void histogramConstructor(unsigned int block_size,
   cudaFree(inds_d);
   cudaFree(hist_d);
   cudaFree(sgm_offset);
-  cudaFree(sgm_id_arr);
+  cudaFree(block_sgm_id);
 }
 
 
