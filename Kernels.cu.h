@@ -22,13 +22,13 @@ __global__ void histVals2IndexKernel(T*            input_arr_d,
 }
 
 // @summary : computes the offsets
-__global__ void segmentOffsets(unsigned int* inds_d,
-                               unsigned int  inds_size,
-                               unsigned int* segment_d, // sort of flag array.
-                               unsigned int* segment_offsets_d,
-                               unsigned int  block_workload,
-                               unsigned int  block_size,
-                               unsigned int* block_sgm_index_d){
+__global__ void segmentMetaData(unsigned int* inds_d,
+                                unsigned int  inds_size,
+                                unsigned int* segment_d, // sort of flag array.
+                                unsigned int* segment_offsets_d,
+                                unsigned int  block_workload,
+                                unsigned int  block_size,
+                                unsigned int* block_sgm_index_d){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
@@ -48,7 +48,6 @@ __global__ void segmentOffsets(unsigned int* inds_d,
 
     if ((gid % block_workload) == 0){
       block_sgm_index_d[gid/block_workload] = this_segment;
-      //printf("%d - %d\n", gid, this_segment);
     }
   }
 }
@@ -243,7 +242,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 //          : inds_arr        -> Data entries to be accumulated in histogram
 //          : num_sgms        -> Number of segments to be handle
 //          : sgm_id_arr      -> Holds indexes for where each segment a block starts in
-//          : sgm_offset_arr  -> 
+//          : sgm_offset_arr  ->
 //          : the largest input element
 __global__ void grymersHistKernel(unsigned int tot_size,
                                   unsigned int num_chunks,
