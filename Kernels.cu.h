@@ -203,8 +203,13 @@ __global__ void christiansHistKernel(unsigned int tot_size,
   unsigned int sgm_start = sgm_offset[curr_sgm];
   unsigned int sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
 
+
+  sgm_start = sgm_offset[curr_sgm];
+  sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
+
   while (sgm_start < block_end) {
     // Reset the shared memory.
+    __syncthreads();
 
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
       Hsh[i] = 0;
@@ -222,7 +227,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
     // Write back to memory
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
       if (offset + i < hist_size) {
-        atomicAdd(&hist[offset + i], Hsh[i]);
+         atomicAdd(&hist[offset + i], Hsh[i]);
       }
     }
 

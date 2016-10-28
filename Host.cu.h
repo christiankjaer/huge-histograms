@@ -6,7 +6,7 @@
 #include <string.h>
 #include <math.h>
 
-#include <../cub/cub.cuh>
+#include <cub/cub.cuh>
 #include "sequential/arraylib.cu.h"
 
 #include "Kernels.cu.h"
