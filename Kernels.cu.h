@@ -21,24 +21,22 @@ __global__ void histVals2IndexKernel(T*            input_arr_d,
 }
 
 // @summary : computes the offsets
-__global__ void segmentMetaData(unsigned int* inds_d,
-                                unsigned int  inds_size,
-                                unsigned int* segment_offsets_d){
+__global__ void segmentOffsetsKernel(unsigned int* inds_d,
+                                     unsigned int  inds_size,
+                                     unsigned int* segment_offsets_d){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
     // assumes inds already partially sorted
-    int this_segment     = inds_d[gid] / GPU_HIST_SIZE;
+    int this_segment = inds_d[gid] / GPU_HIST_SIZE;
     __syncthreads();
     if (gid == 0){
       segment_offsets_d[0] = 0;
-      //printf("first offset \n %d\n", gid);
     } else {
       int prev_segment = inds_d[gid-1] / GPU_HIST_SIZE;
-     if (this_segment != prev_segment){
-       //printf("id %d set %d \n", gid, this_segment);
-       segment_offsets_d[this_segment] = gid;
-     }
+      if (this_segment != prev_segment){
+        segment_offsets_d[this_segment] = gid;
+      }
     }
   }
 }
@@ -55,30 +53,6 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
     atomicAdd(&hist[inds[gid]], 1);
   }
 }
-
-// @summary : computes the offsets
-__global__ void segmentOffsets(int* inds_d,
-                               int  inds_size,
-                               int* segment_d, // sort of flag array.
-                               int* segment_offsets_d){
-  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid < inds_size){
-
-    int this_segment = inds_d[gid] / GPU_HIST_SIZE;
-
-    segment_d[gid] = this_segment;
-    __syncthreads();
-    if (gid == 0){
-      segment_offsets_d[0] = 0;
-    }
-    else{
-     if (this_segment != segment_d[gid-1]){
-       segment_offsets_d[this_segment] = gid;
-     }
-    }
-  }
-}
-
 
 
 // In the case of segments
@@ -143,7 +117,5 @@ __global__ void histKernel(unsigned int tot_size,
   }
 
 }
-
-
 
 #endif //KERNELS_HIST

@@ -114,14 +114,13 @@ void radixSortDevice(unsigned int* unsorted_d,
 
 
 // @summary : for now, just computes segment_sizes.
-void metaData(unsigned int  inds_size,
-              unsigned int* inds_d,
-              unsigned int* segment_sizes_d){
+void segmentOffsets(unsigned int  inds_size,
+                    unsigned int* inds_d,
+                    unsigned int* segment_sizes_d){
+
   int num_blocks = ceil((float)inds_size / CUDA_BLOCK_SIZE);
-  segmentMetaData<<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (inds_d,
-     inds_size,
-     segment_sizes_d);
+
+  segmentOffsetsKernel<<<num_blocks, CUDA_BLOCK_SIZE>>> (inds_d, inds_size, segment_sizes_d);
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
 }
@@ -145,7 +144,7 @@ void largeHistogram(unsigned int image_size,
 
   histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
   radixSortDevice(d_inds, d_inds, image_size);
-  metaData(image_size, d_inds, d_sgm_offset);
+  segmentOffsets(image_size, d_inds, d_sgm_offset);
 
   gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size) );
 
