@@ -14,10 +14,11 @@ template <class T>
 __global__ void histVals2IndexKernel(T*            input_arr_d,
                                      unsigned int* hist_inds_d,
                                      int              size_arr,
+                                     unsigned int    hist_size,
                                      T               max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < size_arr){
-    hist_inds_d[gid] = (int)((input_arr_d[gid]/max_input)*(float)HISTOGRAM_SIZE);
+    hist_inds_d[gid] = (unsigned int)((input_arr_d[gid]/max_input)*(float)hist_size);
   }
 }
 
@@ -194,11 +195,12 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 
   __shared__ int Hsh[GPU_HIST_SIZE];
 
-  const unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
+  unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
 
   unsigned int curr_sgm = sgm_idx[blockIdx.x];
   unsigned int num_segments = ceil((float)hist_size / GPU_HIST_SIZE);
+  unsigned int my_sgm = inds[gid] / GPU_HIST_SIZE;
 
   unsigned int sgm_start = sgm_offset[curr_sgm];
   unsigned int sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
@@ -219,15 +221,17 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 
     // The sequential loop.
     unsigned int offset = curr_sgm * GPU_HIST_SIZE;
-    for (unsigned int i = gid; i < min(block_end, sgm_end); i += blockDim.x) {
-      atomicAdd(&Hsh[inds[i] - offset], 1);
+    for (; gid < min(block_end, sgm_end); gid += blockDim.x) {
+      if (my_sgm == curr_sgm) {
+        atomicAdd(&Hsh[inds[gid] % GPU_HIST_SIZE], 1);
+      }
     }
     __syncthreads();
 
     // Write back to memory
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
       if (offset + i < hist_size) {
-         atomicAdd(&hist[offset + i], Hsh[i]);
+         atomicAdd(&hist[i + offset], Hsh[i]);
       }
     }
 
@@ -235,6 +239,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 
     sgm_start = sgm_offset[curr_sgm];
     sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
+    my_sgm = inds[gid] / GPU_HIST_SIZE;
   }
 
 }

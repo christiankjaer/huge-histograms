@@ -77,6 +77,7 @@ T maximumElement(T* d_in, int arr_size){
 template<class T>
 void histVals2IndexDevice (unsigned int    arr_size,
                            T*                vals_d,
+                           unsigned int      hist_size,
                            unsigned int*     inds_d){
 
   // Allocate device memory
@@ -87,14 +88,14 @@ void histVals2IndexDevice (unsigned int    arr_size,
   /* cudaMemcpy(vals_d, vals_h, arr_size*sizeof(T), cudaMemcpyHostToDevice); */
 
   //  Figure out the boundaries (vague).
-  int num_blocks = ceil(arr_size / CUDA_BLOCK_SIZE);
+  int num_blocks = ceil((float)arr_size / CUDA_BLOCK_SIZE);
   T   boundary   = maximumElement<T>(vals_d, arr_size);
 
   // TODO : handle {arr_size > sizeof(shared_memory)} !?
 
   // Run indexing kernel
   histVals2IndexKernel<T><<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (vals_d, inds_d, arr_size, boundary);
+    (vals_d, inds_d, arr_size, hist_size, boundary);
   cudaThreadSynchronize();
 
   // Write back result
@@ -126,7 +127,7 @@ void histVals2Index (unsigned int    arr_size,
   cudaMemcpy(vals_d, vals_h, arr_size*sizeof(T), cudaMemcpyHostToDevice);
 
   //  Figure out the boundaries (vague).
-  int num_blocks = ceil(arr_size / CUDA_BLOCK_SIZE);
+  int num_blocks = ceil((float)arr_size / CUDA_BLOCK_SIZE);
   T   boundary   = maximumElement<T>(vals_d, arr_size);
 
   // TODO : handle {arr_size > sizeof(shared_memory)} !?
@@ -282,6 +283,44 @@ void metaData(unsigned int  inds_size,
      CUDA_BLOCK_SIZE,
      block_sgm_index_d);
   cudaThreadSynchronize();
+}
+
+template <class T>
+void largeHistogram(unsigned int image_size,
+                    T* d_image,
+                    unsigned int histogram_size,
+                    unsigned int* d_hist) {
+
+
+
+  unsigned int chunk_size = ceil((float)image_size / HARDWARE_PARALLELISM);
+  unsigned int block_workload = chunk_size * CUDA_BLOCK_SIZE;
+  unsigned int num_blocks = ceil((float)image_size / block_workload);
+  unsigned int num_segments = ceil((float)histogram_size / GPU_HIST_SIZE);
+
+  unsigned int *d_inds, *d_sgm_idx, *d_sgm_offset, *d_sorted;
+
+  cudaMalloc(&d_inds, sizeof(unsigned int)*image_size);
+  cudaMalloc(&d_sorted, sizeof(unsigned int)*image_size);
+  cudaMalloc(&d_sgm_idx, sizeof(unsigned int)*num_blocks);
+  cudaMalloc(&d_sgm_offset, sizeof(unsigned int)*num_segments);
+
+  histVals2IndexDevice<float>(image_size, d_image, histogram_size, d_inds);
+  radixSortDevice(d_inds, d_sorted, image_size);
+  metaData(image_size, d_sorted, num_segments, block_workload, d_sgm_offset, d_sgm_idx);
+
+  cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size);
+
+  christiansHistKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>
+    (image_size, histogram_size, chunk_size, d_sgm_idx, d_sgm_offset, d_sorted, d_hist);
+
+  cudaThreadSynchronize();
+
+  cudaFree(d_inds);
+  cudaFree(d_sgm_idx);
+  cudaFree(d_sgm_offset);
+  cudaFree(d_sorted);
+
 }
 
 // @summary: Wrapper for histogram kernel
