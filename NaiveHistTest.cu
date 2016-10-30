@@ -7,8 +7,8 @@
 #include "Kernels.cu.h"
 #include "Host.cu.h"
 
-#define IMG_SIZE 8192*128
-#define HIST_SIZE 8192*64
+#define IMG_SIZE 8192*4
+#define HIST_SIZE 8192*2
 
 long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
   long int diff = (t2->tv_sec - t1->tv_sec) * 1000000;
@@ -47,17 +47,52 @@ void cpu_hist(size_t image_size, float* image, size_t hist_size, unsigned int* h
   fill_histogram(image_size, hist_size, inds, hist);
 }
 
-int main(int argc, char **argv) {
+void test_sgm_offset(unsigned int image_sz, unsigned int hist_sz) {
 
-  unsigned int image_sz, hist_sz;
+  unsigned int chunk_size = ceil((float)image_sz / HARDWARE_PARALLELISM);
+  unsigned int block_workload = chunk_size * CUDA_BLOCK_SIZE;
+  unsigned int num_blocks = ceil((float)image_sz / block_workload);
+  unsigned int num_segments = ceil((float)hist_sz / GPU_HIST_SIZE);
 
-  if (argc != 3) {
-    image_sz = IMG_SIZE;
-    hist_sz = HIST_SIZE;
-  } else {
-    sscanf(argv[1], "%u", &image_sz);
-    sscanf(argv[2], "%u", &hist_sz);
+  float *data = (float*) malloc(sizeof(float[image_sz]));
+  unsigned int *h_sort = (unsigned int*) malloc(sizeof(unsigned int)*image_sz);
+  unsigned int *h_sgm_idx = (unsigned int*) malloc(sizeof(unsigned int)*num_blocks);
+  unsigned int *h_sgm_offset = (unsigned int*) malloc(sizeof(unsigned int)*num_segments);
+
+  float *d_image;
+  unsigned int *d_inds, *d_sgm_idx, *d_sgm_offset, *d_sorted;
+
+  cudaMalloc(&d_inds, sizeof(unsigned int)*image_sz);
+  cudaMalloc(&d_sorted, sizeof(unsigned int)*image_sz);
+  cudaMalloc(&d_sgm_idx, sizeof(unsigned int)*num_blocks);
+  cudaMalloc(&d_sgm_offset, sizeof(unsigned int)*num_segments);
+  cudaMalloc(&d_image, sizeof(float)*image_sz);
+
+  srand(time(NULL));
+
+  for (size_t i = 0; i < image_sz; i++) {
+    data[i] = ((float)rand()/(float)RAND_MAX) * 256.0f;
   }
+
+  cudaMemcpy(d_image, data, sizeof(int)*image_sz, cudaMemcpyHostToDevice);
+
+  histVals2IndexDevice<float>(image_sz, d_image, hist_sz, d_inds);
+  radixSortDevice(d_inds, d_sorted, image_sz);
+  metaData(image_sz, d_sorted, num_segments, block_workload, d_sgm_offset, d_sgm_idx);
+
+  cudaMemcpy(h_sgm_offset, d_sgm_offset, sizeof(unsigned int)*num_segments, cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_sgm_idx, d_sgm_idx, sizeof(unsigned int)*num_blocks, cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_sort, d_sorted, sizeof(unsigned int)*image_sz, cudaMemcpyDeviceToHost);
+
+  cudaThreadSynchronize();
+
+  printIntArraySeq<unsigned int>(h_sort, image_sz);
+  printIntArraySeq<unsigned int>(h_sgm_offset, num_segments);
+  printIntArraySeq<unsigned int>(h_sgm_idx, num_blocks);
+
+}
+
+void test_hist(unsigned int image_sz, unsigned int hist_sz) {
 
   unsigned int chunk_size = ceil((float)image_sz / HARDWARE_PARALLELISM);
   unsigned int block_workload = chunk_size * CUDA_BLOCK_SIZE;
@@ -111,4 +146,20 @@ int main(int argc, char **argv) {
       break;
     }
   }
+}
+
+int main(int argc, char **argv) {
+
+  unsigned int image_sz, hist_sz;
+
+  if (argc != 3) {
+    image_sz = IMG_SIZE;
+    hist_sz = HIST_SIZE;
+  } else {
+    sscanf(argv[1], "%u", &image_sz);
+    sscanf(argv[2], "%u", &hist_sz);
+  }
+
+  test_hist(image_sz, hist_sz);
+  //test_sgm_offset(image_sz, hist_sz);
 }

@@ -25,7 +25,6 @@ __global__ void histVals2IndexKernel(T*            input_arr_d,
 // @summary : computes the offsets
 __global__ void segmentMetaData(unsigned int* inds_d,
                                 unsigned int  inds_size,
-                                unsigned int* segment_d, // sort of flag array.
                                 unsigned int* segment_offsets_d,
                                 unsigned int  block_workload,
                                 unsigned int  block_size,
@@ -35,13 +34,13 @@ __global__ void segmentMetaData(unsigned int* inds_d,
   if (gid < inds_size){
     // assumes inds already partially sorted
     int this_segment     = inds_d[gid] / GPU_HIST_SIZE;
-    segment_d[gid]       = this_segment;
     __syncthreads();
     if (gid == 0){
       segment_offsets_d[0] = 0;
       //printf("first offset \n %d\n", gid);
     } else {
-     if (this_segment != segment_d[gid-1]){
+      int prev_segment = inds_d[gid-1] / GPU_HIST_SIZE;
+     if (this_segment != prev_segment){
        //printf("id %d set %d \n", gid, this_segment);
        segment_offsets_d[this_segment] = gid;
      }
@@ -141,6 +140,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
   sgm_start = sgm_offset[curr_sgm];
   sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
 
+
   while (sgm_start < block_end) {
     // Reset the shared memory.
     __syncthreads();
@@ -154,7 +154,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
     // The sequential loop.
     unsigned int offset = curr_sgm * GPU_HIST_SIZE;
     for (int i = gid; i < min(block_end, sgm_end); i += blockDim.x) {
-      atomicAdd(&Hsh[inds[i] % GPU_HIST_SIZE], 1);
+      atomicAdd(&Hsh[inds[i] - offset], 1);
     }
     __syncthreads();
 

@@ -256,14 +256,10 @@ void metaData(unsigned int  inds_size,
               unsigned int* block_sgm_index_d
               ){
   int num_blocks = ceil((float)inds_size / CUDA_BLOCK_SIZE);
-  unsigned int* segment_d;
-  cudaMalloc(&segment_d, sizeof(unsigned int)*inds_size);
-  cudaMemset(segment_d, 0, inds_size * sizeof(unsigned int));
   cudaMemset(segment_sizes_d, 0, num_segments * sizeof(unsigned int));
   segmentMetaData<<<num_blocks, CUDA_BLOCK_SIZE>>>
     (inds_d,
      inds_size,
-     segment_d,
      segment_sizes_d,
      block_workload,
      CUDA_BLOCK_SIZE,
