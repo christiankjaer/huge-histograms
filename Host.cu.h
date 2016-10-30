@@ -246,20 +246,6 @@ void radixSort(unsigned int* array_to_be_sorted,
   cudaFree(d_temp_storage);
 }
 
-// @summary: Constructs a histogram
-template <class T>
-void naiveHist(T*      h_array,
-               int*     h_hist,
-               int data_length) {
-
-  // histogram index array
-  int* d_inds;
-  cudaMalloc(&d_inds, sizeof(int) * data_length);
-
-  // Finds maximum element
-  // int max_elem = 10000;
-
-}
 
 // @summary : for now, just computes segment_sizes.
 void metaData(unsigned int  inds_size,
@@ -290,7 +276,6 @@ void largeHistogram(unsigned int image_size,
                     T* d_image,
                     unsigned int histogram_size,
                     unsigned int* d_hist) {
-
 
 
   unsigned int chunk_size = ceil((float)image_size / HARDWARE_PARALLELISM);
