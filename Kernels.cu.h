@@ -2,8 +2,6 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
-#define GPU_HIST_SIZE 8192
-
 // @summary : Computes the histogram indexes based on a normalization of the data
 // @remarks : Assumes all values in the input array to be non-negative
 // @params  : input_arr_d -> the input values
@@ -13,9 +11,9 @@
 template <class T>
 __global__ void histVals2IndexKernel(T*            input_arr_d,
                                      unsigned int* hist_inds_d,
-                                     int              size_arr,
-                                     unsigned int    hist_size,
-                                     T               max_input){
+                                     unsigned int  size_arr,
+                                     unsigned int  hist_size,
+                                     T             max_input){
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < size_arr){
     hist_inds_d[gid] = (unsigned int)((input_arr_d[gid]/max_input)*(T)(hist_size-1));
@@ -47,32 +45,14 @@ __global__ void segmentMetaData(unsigned int* inds_d,
 
 // @remarks : needs proper documentation
 __global__ void naiveHistKernel(unsigned int  tot_size,
-                                int*              inds,
-                                int*              hist) {
-
-  __shared__ int Hsh[CHUNK_SIZE];
+                                unsigned int* inds,
+                                unsigned int* hist) {
 
   // Thread index
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  // Block dimension (# of threads per block)
-  const unsigned int bdx = blockDim.x;
-  // # of threads assigned to each chunk
-  const unsigned int hist_elems = CHUNK_SIZE / bdx;
-  // # of tasks per thread
-  const unsigned int tot_elems = tot_size / bdx;
 
   if (gid < tot_size) {
-    for (int i = 0; i < hist_elems; i++) {
-      Hsh[i*bdx + gid] = 0;
-    }
-    __syncthreads();
-    for (int i = 0; i < tot_elems; i++) {
-      atomicAdd(&Hsh[inds[bdx*i + gid]], 1);
-    }
-    __syncthreads();
-    for (int i = 0; i < hist_elems; i++) {
-      hist[i*bdx + gid] = Hsh[i*bdx + gid];
-    }
+    atomicAdd(&hist[inds[gid]], 1);
   }
 }
 
@@ -135,7 +115,6 @@ __global__ void histKernel(unsigned int tot_size,
 
   while (sgm_start < block_end) {
     // Reset the shared memory.
-    __syncthreads();
 
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
       Hsh[i] = 0;

@@ -10,6 +10,7 @@
 #define IMG_SIZE 8192*768
 #define HIST_SIZE 8192*12
 
+
 long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
   long int diff = (t2->tv_sec - t1->tv_sec) * 1000000;
   diff += t2->tv_usec - t1->tv_usec;
@@ -49,6 +50,8 @@ void cpu_hist(size_t image_size, float* image, size_t hist_size, unsigned int* h
 
 void test_hist(unsigned int image_sz, unsigned int hist_sz) {
 
+  printf("\nTesting histogram with\nimage size: %d\nhist size:%d\n", image_sz, hist_sz);
+
   unsigned int chunk_size = ceil((float)image_sz / HARDWARE_PARALLELISM);
   unsigned int block_workload = chunk_size * CUDA_BLOCK_SIZE;
   unsigned int num_blocks = ceil((float)image_sz / block_workload);
@@ -59,14 +62,16 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
 
   float *data = (float*) malloc(sizeof(float[image_sz]));
   unsigned int *hist = (unsigned int*) malloc(sizeof(unsigned int[hist_sz]));
+  unsigned int *hist2 = (unsigned int*) malloc(sizeof(unsigned int[hist_sz]));
   unsigned int *seq_hist = (unsigned int*) malloc(sizeof(unsigned int[hist_sz]));
 
 
   float *d_image;
-  unsigned int *d_hist;
+  unsigned int *d_hist, *d_hist2;
 
-  cudaMalloc(&d_image, sizeof(float)*image_sz);
-  cudaMalloc(&d_hist, sizeof(int)*hist_sz);
+  gpuErrchk( cudaMalloc(&d_image, sizeof(float)*image_sz) );
+  gpuErrchk( cudaMalloc(&d_hist, sizeof(int)*hist_sz) );
+  gpuErrchk( cudaMalloc(&d_hist2, sizeof(int)*hist_sz) );
 
   srand(time(NULL));
 
@@ -78,29 +83,42 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   cpu_hist(image_sz, data, hist_sz, seq_hist);
   gettimeofday(&t_end, NULL);
   elapsed = timeval_subtract(&t_end, &t_start);
-  printf("Histogram calculated in %d µs\n", elapsed);
+  printf("Histogram calculated (CPU) in %d µs\n", elapsed);
 
-  cudaMemcpy(d_image, data, sizeof(int)*image_sz, cudaMemcpyHostToDevice);
-  cudaThreadSynchronize();
+  gpuErrchk( cudaMemcpy(d_image, data, sizeof(int)*image_sz, cudaMemcpyHostToDevice) );
 
   gettimeofday(&t_start, NULL);
-
   largeHistogram<float>(image_sz, d_image, hist_sz, d_hist);
-
-  printf("%s\n", cudaGetErrorString(cudaGetLastError()));
-
   gettimeofday(&t_end, NULL);
   elapsed = timeval_subtract(&t_end, &t_start);
-  printf("Histogram calculated in %d µs\n", elapsed);
+  printf("Histogram calculated (GPU shared) in %d µs\n", elapsed);
 
-  cudaMemcpy(hist, d_hist, sizeof(int)*hist_sz, cudaMemcpyDeviceToHost);
+  gettimeofday(&t_start, NULL);
+  naiveHistogram<float>(image_sz, d_image, hist_sz, d_hist2);
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+  printf("Histogram calculated (GPU naive) in %d µs\n", elapsed);
+
+  gpuErrchk( cudaMemcpy(hist, d_hist, sizeof(int)*hist_sz, cudaMemcpyDeviceToHost) );
+  gpuErrchk( cudaMemcpy(hist2, d_hist2, sizeof(int)*hist_sz, cudaMemcpyDeviceToHost) );
 
   for (int i = 0; i < hist_sz; i++) {
     if (seq_hist[i] != hist[i]) {
-      printf("INVALID %d != %d at %d\n", seq_hist[i], hist[i], i);
+      printf("INVALID (shared) %d != %d at %d\n", seq_hist[i], hist[i], i);
+      break;
+    }
+    if (seq_hist[i] != hist2[i]) {
+      printf("INVALID (naive) %d != %d at %d\n", seq_hist[i], hist2[i], i);
       break;
     }
   }
+  cudaFree(d_image);
+  cudaFree(d_hist);
+  cudaFree(d_hist2);
+  free(data);
+  free(hist);
+  free(hist2);
+  free(seq_hist);
 }
 
 int main(int argc, char **argv) {
@@ -113,6 +131,8 @@ int main(int argc, char **argv) {
   } else {
     sscanf(argv[1], "%u", &image_sz);
     sscanf(argv[2], "%u", &hist_sz);
+    image_sz *= 8192;
+    hist_sz *= 8192;
   }
 
   test_hist(image_sz, hist_sz);

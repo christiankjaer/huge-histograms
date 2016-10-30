@@ -15,9 +15,9 @@
 //            size_arr  -> input array size
 //            size_hist -> the histogram size
 void arr2HistIdxSeq(float* input_arr, unsigned int* hist_inds,
-                    int size_arr, float max_input) {
+                    int size_arr, float max_input, unsigned int hist_size) {
   for (int i=0; i < size_arr; i++) {
-    hist_inds[i] = (int)((input_arr[i]/max_input)*(float)HISTOGRAM_SIZE);
+    hist_inds[i] = (int)((input_arr[i]/max_input)*(float)hist_size);
   }
 }
 
@@ -25,7 +25,7 @@ void arr2HistIdxSeq(float* input_arr, unsigned int* hist_inds,
 // @returns : the array of segment sizes
 void segmentSizesSeq(unsigned int* inds, int inds_size, 
                      unsigned int* segment_sizes, int num_segments){
-  int this_segment_max = CHUNK_SIZE;
+  int this_segment_max = GPU_HIST_SIZE;
   int this_segment     = 0;
   // zero segment_sizes
   for (int i = 0; i < num_segments; i ++){
@@ -34,7 +34,7 @@ void segmentSizesSeq(unsigned int* inds, int inds_size,
   // assumes the inds_array already partially sorted
   for (int i = 0; i < inds_size; i++){
     if (inds[i] >= this_segment_max){
-      this_segment_max += CHUNK_SIZE;
+      this_segment_max += GPU_HIST_SIZE;
       this_segment++;
     }
     segment_sizes[this_segment] += 1;

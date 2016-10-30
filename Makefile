@@ -1,16 +1,17 @@
-nvflags=-I../cub-1.5.2 -std=c++11 -Wno-deprecated-gpu-targets
+nvflags=-I../cub-1.5.2 -std=c++11 -Wno-deprecated-gpu-targets --gpu-architecture=compute_35 --gpu-code=compute_35
 nvcom=nvcc $(nvflags)
 
 default:
 	$(nvcom) -o hist ./histMain.cu
 
-compile:
-#nvcc -Wno-deprecated-gpu-targets -o segind ./SegmentIndex.cu
+histtest: NaiveHistTest.cu
+	$(nvcom) -o histtest NaiveHistTest.cu
 
 clean:
 	rm -f ./hist
 	rm -f ./tests
 	rm -f ./segind
+	rm -f histtest
 
 segind:
 	make -s recompile
@@ -31,7 +32,3 @@ tests:
 recompile:
 	make -s clean
 	make -s compile
-
-backup:
-	make -s clean
-	cp -r ./* ../backup/

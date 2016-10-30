@@ -6,8 +6,8 @@
 #include <string.h>
 #include <omp.h>
 
-#define IMG_SIZE 8192*8192
-#define HIST_SIZE 32
+#define IMG_SIZE 8192*768
+#define HIST_SIZE 8192*64
 
 long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
   long int diff = (t2->tv_sec - t1->tv_sec) * 1000000;
