@@ -25,10 +25,7 @@ __global__ void histVals2IndexKernel(T*            input_arr_d,
 // @summary : computes the offsets
 __global__ void segmentMetaData(unsigned int* inds_d,
                                 unsigned int  inds_size,
-                                unsigned int* segment_offsets_d,
-                                unsigned int  block_workload,
-                                unsigned int  block_size,
-                                unsigned int* block_sgm_index_d){
+                                unsigned int* segment_offsets_d){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
@@ -44,10 +41,6 @@ __global__ void segmentMetaData(unsigned int* inds_d,
        //printf("id %d set %d \n", gid, this_segment);
        segment_offsets_d[this_segment] = gid;
      }
-    }
-
-    if ((gid % block_workload) == 0){
-      block_sgm_index_d[gid/block_workload] = this_segment;
     }
   }
 }
@@ -118,13 +111,12 @@ __global__ void segmentOffsets(int* inds_d,
 //   commit to memory
 
 
-__global__ void christiansHistKernel(unsigned int tot_size,
-                                     unsigned int hist_size,
-                                     unsigned int chunk_size,
-                                     unsigned int *sgm_idx,
-                                     unsigned int *sgm_offset,
-                                     unsigned int *inds,
-                                     unsigned int *hist) {
+__global__ void histKernel(unsigned int tot_size,
+                           unsigned int hist_size,
+                           unsigned int chunk_size,
+                           unsigned int *sgm_offset,
+                           unsigned int *inds,
+                           unsigned int *hist) {
 
   __shared__ int Hsh[GPU_HIST_SIZE];
 
@@ -171,99 +163,6 @@ __global__ void christiansHistKernel(unsigned int tot_size,
     sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
   }
 
-}
-
-// @summary : Computes local histogram of CHUNK_SIZE, and commits to global histogram
-// @remarks : Assumes all index arrays are non-negative values
-// @params  : tot_size        -> Number of data entries
-//          : num_chunks      -> Number of chunks in global histogram
-//          : hist_arr        -> Global histogram
-//          : inds_arr        -> Data entries to be accumulated in histogram
-//          : num_sgms        -> Number of segments to be handle
-//          : sgm_id_arr      -> Holds indexes for where each segment a block starts in
-//          : sgm_offset_arr  ->
-//          : the largest input element
-__global__ void grymersHistKernel(unsigned int tot_size,
-                                  unsigned int num_chunks,
-                                  unsigned int num_sgms,
-                                  unsigned int *sgm_id_arr,
-                                  unsigned int *sgm_offset_arr,
-                                  unsigned int *inds_arr,
-                                  unsigned int *hist_arr) {
-  
-  // Block local histogram
-  __shared__ int Hsh[CHUNK_SIZE];
-
-  // Local idx  (----//----)
-  const unsigned int tidx = threadIdx.x;
-  // Number of threads in the block/stride size
-  const unsigned int bdx = blockDim.x;
-  // Block index
-  const unsigned int bid = blockIdx.x;
-  // Block workload
-  const unsigned int wload = CHUNK_SIZE*bdx;
-  // Global idx (first position of n datapoints in global data)
-  const unsigned int gidx = bid * wload + tidx;
-  // (Global) End of current block to be worked on
-  const unsigned int bnd = gidx + wload;
-
-  // Get segment idx at start of block and its global offset
-  unsigned int sgm_id    = sgm_id_arr[bdx];
-  unsigned int sgm_start = sgm_offset_arr[sgm_id];
-  // Get last segment element global idx
-  unsigned int sgm_end;
-  if (sgm_id != num_sgms-1)
-    sgm_end = sgm_offset_arr[sgm_id+1];
-  else
-    sgm_end = tot_size;
-
-  /* Zero out local histogram */
-  for (int i = threadIdx.x; i < CHUNK_SIZE; i+=bdx) {
-    Hsh[i] = 0;
-  }
-  
-  unsigned int global_elem; // variable to decide which data entry, or global histogram index
-
-  /* Loops through CHUNK_SIZE * blockDim.x data points to be added to histogram */
-  /* forall i < CHUNK_SIZE * blockDim.x  */
-    
-  while (sgm_end < bnd) {
-    __syncthreads();
-    // Jump in strides of block size (blockDim)
-    // iterates by stride through the CHUNK_SIZE*blockDim.x elements
-    for (int i=gidx;i<gidx+wload;i+=bdx) {
-      //global_elem = gidx + i; // global data point index
-      if (i < tot_size) {
-        //Check if we are within a segment
-        if ((i>=sgm_start) && (i<sgm_end)) 
-          // global_index % CHUNK_SIZE = local_hist_id
-          atomicAdd(&Hsh[inds_arr[i]%CHUNK_SIZE], 1); // Atomic add for local histogram
-      }
-    }
-    
-    __syncthreads();
-    // Update global histogram
-    for (int i=tidx;i<CHUNK_SIZE;i+=bdx) {
-      global_elem = sgm_id*CHUNK_SIZE + i; // Global histogram index
-      // update histogram if we are within segment, and still inside global histogram size
-      if (global_elem>=sgm_id*CHUNK_SIZE && global_elem < sgm_end)
-        atomicAdd(&hist_arr[global_elem], Hsh[i]); // Atomic update for global histogram
-    }
-    
-    __syncthreads();
-    /* Zero out local histogram */
-    for (int i = threadIdx.x; i < CHUNK_SIZE; i+=bdx) {
-      Hsh[i] = 0;
-    }
-    
-    // Update start/end of segment
-    sgm_id++;
-    sgm_start = sgm_end;
-    if (sgm_id != num_sgms-1)
-      sgm_end = sgm_offset_arr[sgm_id+1];
-    else
-      sgm_end = tot_size;
-  }
 }
 
 
