@@ -143,7 +143,7 @@ void largeHistogram(unsigned int image_size,
   gpuErrchk( cudaMalloc(&d_inds, sizeof(unsigned int)*image_size) );
   gpuErrchk( cudaMalloc(&d_sgm_offset, sizeof(unsigned int)*num_segments) );
 
-  histVals2IndexDevice<float>(image_size, d_image, histogram_size, d_inds);
+  histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
   radixSortDevice(d_inds, d_inds, image_size);
   metaData(image_size, d_inds, d_sgm_offset);
 
@@ -172,7 +172,7 @@ void naiveHistogram(unsigned int image_size,
 
   gpuErrchk( cudaMalloc(&d_inds, sizeof(unsigned int)*image_size) );
 
-  histVals2IndexDevice<float>(image_size, d_image, histogram_size, d_inds);
+  histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
 
   gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size) );
 
