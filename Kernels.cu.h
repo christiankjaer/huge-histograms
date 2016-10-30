@@ -131,7 +131,7 @@ __global__ void christiansHistKernel(unsigned int tot_size,
   unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
 
-  unsigned int curr_sgm = sgm_idx[blockIdx.x];
+  unsigned int curr_sgm = inds[blockIdx.x*blockDim.x*chunk_size] / GPU_HIST_SIZE;
   unsigned int num_segments = ceil((float)hist_size / GPU_HIST_SIZE);
 
   unsigned int sgm_start = sgm_offset[curr_sgm];
@@ -153,8 +153,8 @@ __global__ void christiansHistKernel(unsigned int tot_size,
 
     // The sequential loop.
     unsigned int offset = curr_sgm * GPU_HIST_SIZE;
-    for (int i = gid; i < min(block_end, sgm_end); i += blockDim.x) {
-      atomicAdd(&Hsh[inds[i] - offset], 1);
+    for (; gid < min(block_end, sgm_end); gid += blockDim.x) {
+      atomicAdd(&Hsh[inds[gid] - offset], 1);
     }
     __syncthreads();
 

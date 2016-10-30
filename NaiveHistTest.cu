@@ -7,8 +7,8 @@
 #include "Kernels.cu.h"
 #include "Host.cu.h"
 
-#define IMG_SIZE 8192*4
-#define HIST_SIZE 8192*2
+#define IMG_SIZE 8192*768
+#define HIST_SIZE 8192*12
 
 long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
   long int diff = (t2->tv_sec - t1->tv_sec) * 1000000;
@@ -142,7 +142,7 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
 
   for (int i = 0; i < hist_sz; i++) {
     if (seq_hist[i] != hist[i]) {
-      printf("INVALID %d != %d\n at %d\n", seq_hist[i], hist[i], i);
+      printf("INVALID %d != %d at %d\n", seq_hist[i], hist[i], i);
       break;
     }
   }
