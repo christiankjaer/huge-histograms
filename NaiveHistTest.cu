@@ -139,5 +139,5 @@ int main(int argc, char **argv) {
     hist_sz *= 1024;
   }
 
-  test_hist<double>(image_sz, hist_sz);
+  test_hist<float>(image_sz, hist_sz);
 }

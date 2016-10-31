@@ -1,4 +1,4 @@
-nvflags=-I../cub-1.5.2 -std=c++11 -Wno-deprecated-gpu-targets --gpu-architecture=compute_35 --gpu-code=compute_35
+nvflags=-O3 -I../cub-1.5.2 -std=c++11 -Wno-deprecated-gpu-targets --gpu-architecture=compute_35 --gpu-code=compute_35
 nvcom=nvcc $(nvflags)
 
 default:
