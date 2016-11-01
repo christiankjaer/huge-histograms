@@ -22,6 +22,12 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
   }
 }
 
+long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
+  long int diff = (t2->tv_sec - t1->tv_sec) * 1000000;
+  diff += t2->tv_usec - t1->tv_usec;
+  return diff;
+}
+
 
 // @summary : computes the maximum value in an array of values of type T.
 template<class T>
@@ -70,15 +76,14 @@ void histVals2IndexDevice (unsigned int    arr_size,
   // Run indexing kernel
   histVals2IndexKernel<T><<<num_blocks, CUDA_BLOCK_SIZE>>>
     (vals_d, inds_d, arr_size, hist_size, boundary);
-  gpuErrchk( cudaPeekAtLastError() );
-  gpuErrchk( cudaDeviceSynchronize() );
 }
 
 
 // @summary : partially sortes an index array in chunk size bounded segments
 void radixSortDevice(unsigned int* unsorted_d,
                      unsigned int* sorted_d,
-                     unsigned int  array_length){
+                     unsigned int  array_length,
+                     unsigned int  hist_size){
 
 
   void   *d_temp_storage    = NULL;
@@ -87,8 +92,8 @@ void radixSortDevice(unsigned int* unsorted_d,
 
   // TODO : Figure out an intelligent way of computing end bit [-.-]
   int begin_bit = ceil(log2((float) GPU_HIST_SIZE));
-  // int end_bit   = max(begin_bit, (int)ceil(log2((float) HISTOGRAM_SIZE))) + 1;
-  int end_bit   = sizeof(int)*8;
+  int end_bit   = max(begin_bit, (int)ceil(log2((float) hist_size)))+1;
+  // int end_bit = 8*sizeof(unsigned int);
 
   // Figure out how much temporary storage is needed
   gpuErrchk( cub::DeviceRadixSort::SortKeys(d_temp_storage,
@@ -113,7 +118,8 @@ void radixSortDevice(unsigned int* unsorted_d,
 }
 
 
-// @summary : for now, just computes segment_sizes.
+// @summary : Computes segment offsets for each
+//            segment into the index array
 void segmentOffsets(unsigned int  inds_size,
                     unsigned int* inds_d,
                     unsigned int* segment_sizes_d){
@@ -125,11 +131,13 @@ void segmentOffsets(unsigned int  inds_size,
   gpuErrchk( cudaDeviceSynchronize() );
 }
 
+// @summary : Host wrapper for the segmented histogram
+//            kernel.
 template <class T>
-void largeHistogram(unsigned int image_size,
-                    T* d_image,
-                    unsigned int histogram_size,
-                    unsigned int* d_hist) {
+unsigned long int largeHistogram(unsigned int image_size,
+                                 T* d_image,
+                                 unsigned int histogram_size,
+                                 unsigned int* d_hist) {
 
 
   unsigned int chunk_size = ceil((float)image_size / HARDWARE_PARALLELISM);
@@ -137,32 +145,42 @@ void largeHistogram(unsigned int image_size,
   unsigned int num_blocks = ceil((float)image_size / block_workload);
   unsigned int num_segments = ceil((float)histogram_size / GPU_HIST_SIZE);
 
-  unsigned int *d_inds, *d_sgm_offset;
+  unsigned int *d_inds, *d_sorted, *d_sgm_offset;
 
   gpuErrchk( cudaMalloc(&d_inds, sizeof(unsigned int)*image_size) );
+  gpuErrchk( cudaMalloc(&d_sorted, sizeof(unsigned int)*image_size) );
   gpuErrchk( cudaMalloc(&d_sgm_offset, sizeof(unsigned int)*num_segments) );
 
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+
+  gettimeofday(&t_start, NULL);
+
   histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
-  radixSortDevice(d_inds, d_inds, image_size);
-  segmentOffsets(image_size, d_inds, d_sgm_offset);
+  radixSortDevice(d_inds, d_sorted, image_size, histogram_size);
+  segmentOffsets(image_size, d_sorted, d_sgm_offset);
 
   gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size) );
 
   histKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (image_size, histogram_size, chunk_size, d_sgm_offset, d_inds, d_hist);
+    (image_size, histogram_size, chunk_size, d_sgm_offset, d_sorted, d_hist);
 
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
 
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+
   cudaFree(d_inds);
   cudaFree(d_sgm_offset);
+  return elapsed;
 }
 
 template <class T>
-void naiveHistogram(unsigned int image_size,
-                    T* d_image,
-                    unsigned int histogram_size,
-                    unsigned int* d_hist) {
+unsigned long int naiveHistogram(unsigned int image_size,
+                                 T* d_image,
+                                 unsigned int histogram_size,
+                                 unsigned int* d_hist) {
 
 
   unsigned int num_blocks = ceil((float)image_size / CUDA_BLOCK_SIZE);
@@ -170,6 +188,10 @@ void naiveHistogram(unsigned int image_size,
   unsigned int *d_inds;
 
   gpuErrchk( cudaMalloc(&d_inds, sizeof(unsigned int)*image_size) );
+
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+  gettimeofday(&t_start, NULL);
 
   histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
 
@@ -180,7 +202,11 @@ void naiveHistogram(unsigned int image_size,
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
 
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+
   cudaFree(d_inds);
+  return elapsed;
 }
 
 #endif //HOST_HIST
