@@ -61,6 +61,14 @@ T max_elem(size_t arr_size, T* arr) {
   return maxe;
 }
 
+// @test    : compares two arrays of type T are exactly the same.
+// @remarks : assumes the two arrays to be of equal size.
+template<class T>
+void compareTest(T* result, T* expected, int size){
+  for(int i = 0; i < size; i++){
+    if (!myAssert(result[i] == expected[i])) return;
+  }
+}
 
 
 template <class T>
@@ -80,6 +88,15 @@ void compareTestEps(T* result, T* expected, int size, T eps){
   }
 }
 
+template<class T>
+T sumSeq(T* arr, int arr_size){
+  T sum = (T) 0;
+  for (int i = 0; i < arr_size; i++){
+    sum = sum + arr[i];
+  }
+  return sum;
+}
+
 template <class T>
 void test_hist(unsigned int image_sz, unsigned int hist_sz) {
 
@@ -89,31 +106,46 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   T* out = (T*)malloc(image_sz * sizeof(T));
   T* out_async = (T*)malloc(image_sz * sizeof(T));
   unsigned int* hist = (unsigned int*) malloc(hist_sz*sizeof(int));
-
+  unsigned int* hist_naive = (unsigned int*) malloc(hist_sz*sizeof(int));
   for (size_t i = 0; i < image_sz; i++) {
     data[i] = ((T)rand()/(T)RAND_MAX)*16;
     out[i] = (T) 0;
   }
   for (size_t i = 0; i < hist_sz; i++){
     hist[i] = 0;
+    hist_naive[i] = 0;
   }
   
   // naiveSquare<T>(image_sz, data, out);
   // asyncSquare<T> (image_sz, data, out_async);
-  // compareTestEps<T>(out, out_async, image_sz, (T) 0.0001);
+  
   //printFloatArraySeq(data, image_sz);
 
   T* d_data;
+  unsigned int *d_hist_naive;
   cudaMalloc((void**)&d_data, image_sz*sizeof(T));
+  cudaMalloc((void**)&d_hist_naive, hist_sz*sizeof(unsigned int));
   cudaMemcpy(d_data, data, image_sz*sizeof(T), cudaMemcpyHostToDevice);
-  
+  //  cudaMemcpy(d_hist_naive, hist_naive, _sz*sizeof(T), cudaMemcpyHostToDevice);
+  naiveHistogram<T>(image_sz, d_data, hist_sz, d_hist_naive);
+  cudaMemcpy(hist_naive, d_hist_naive, hist_sz*sizeof(T), cudaMemcpyDeviceToHost);
+  cudaFree(d_hist_naive);
   T max = maximumElement<T>(d_data, image_sz);
-
   printf("Max elem: %5.4f\n", max);
-
+  cudaFree(d_data);
   asyncHist<T>(image_sz, data, hist_sz, hist, max);
+  
+  compareTest<unsigned int>(hist, hist_naive, hist_sz);
 
+  printf("LARGE HISTOGRAM RESULTS\n");
+  printIntArraySeq(hist_naive, hist_sz);
+  printf("ASYNCHRONOUS HISTOGRAM RESULTS\n");
+  printIntArraySeq(hist, hist_sz);
+  printf("passed : %d\n", result);
+  printf("LARGE SUM: %d, ASYNC SUM: %d\n", sumSeq(hist_naive, hist_sz), sumSeq(hist, hist_sz));
+  
 
+  cudaFree(d_data);
   free(data);
   free(out);
   free(out_async);

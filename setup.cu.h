@@ -5,7 +5,7 @@
 #define RADIX_END_BIT        8         // Number of bit for 1 byte
 #define CUDA_BLOCK_SIZE      512       // Kernel blocksize
 #define HARDWARE_PARALLELISM 65536     // 2^16
-#define MAXIMUM_STREAM_SIZE  1024*1024 // Max
+#define MAXIMUM_STREAM_SIZE  1024*512 // Max
 #define STREAM_SIZE_GPU      256*1024  // memory limit on GPU
 
 #endif //SETUP
