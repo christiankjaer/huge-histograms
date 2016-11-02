@@ -4,6 +4,9 @@ nvcom=nvcc $(nvflags)
 default:
 	$(nvcom) -o hist ./histMain.cu
 
+asyncTest: asyncHistTest.cu
+	$(nvcom) -o asyncTest asyncHistTest.cu
+
 histtest: NaiveHistTest.cu
 	$(nvcom) -o histtest NaiveHistTest.cu
 
@@ -11,7 +14,8 @@ clean:
 	rm -f ./hist
 	rm -f ./tests
 	rm -f ./segind
-	rm -f histtest
+	rm -f ./histtest
+	rm -f ./asyncTest
 
 segind:
 	make -s recompile

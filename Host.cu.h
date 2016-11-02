@@ -29,6 +29,13 @@ long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
 }
 
 
+long int timeval_subtract(struct timeval* t2, struct timeval* t1) {
+  long int diff = (t2->tv_sec - t1->tv_sec) * 1000000;
+  diff += t2->tv_usec - t1->tv_usec;
+  return diff;
+}
+
+
 // @summary : computes the maximum value in an array of values of type T.
 template<class T>
 T maximumElement(T* d_in, int arr_size){
@@ -56,6 +63,34 @@ T maximumElement(T* d_in, int arr_size){
   return h_max;
 }
 
+// @summary : computes the maximum value in an array of values of type T.
+template<class T>
+void maximumElementDevice(T* d_in, T* max, int arr_size){
+
+  // Determine temporary device storage requirements
+  T* d_max;
+  //T  h_max;
+  gpuErrchk( cudaMalloc((void**)&d_max, sizeof(T)) );
+  void*    d_temp_storage     = NULL;
+  size_t   temp_storage_bytes = 0;
+
+  // Dummy call, to set temp_storage values.¨
+  gpuErrchk( cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size) );
+  gpuErrchk( cudaMalloc(&d_temp_storage, temp_storage_bytes) );
+
+  // Let Cub handle the reduction
+  gpuErrchk( cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, d_in, d_max, arr_size) );
+
+  // Copy back the reduced element
+  max[0] = d_max[0];
+  //gpuErrchk( cudaMemcpy(&h_max, d_max, sizeof(T), cudaMemcpyDeviceToHost) );
+
+  // Clean up memory
+  cudaFree(d_temp_storage);
+  cudaFree(d_max);
+  //return d_max;
+}
+
 
 // @summary : Normalizes the dateset, and computes histogram indexes.
 // @remarks : Asserts the value and index arrays to have the same sizes.
@@ -76,6 +111,31 @@ void histVals2IndexDevice (unsigned int    arr_size,
   // Run indexing kernel
   histVals2IndexKernel<T><<<num_blocks, CUDA_BLOCK_SIZE>>>
     (vals_d, inds_d, arr_size, hist_size, boundary);
+}
+
+// @summary : Normalizes the dateset, and computes histogram indexes.
+// @remarks : Asserts the value and index arrays to have the same sizes.
+// @params  : block_size -> size of the CUDA blocks to be used
+//            arr_size   -> size of the two arrays
+//            boundary   -> the maximum element size
+//            vals_h     -> a pointer to the host allocated values
+//            inds_h     -> a pointer to the host allocated index array
+//            Boundary   -> boundary element to split bin intervals
+template<class T>
+void histVals2IndexDeviceMax (unsigned int    arr_size,
+                              T*                vals_d,
+                              unsigned int      hist_size,
+                              unsigned int*     inds_d,
+                              T               boundary){
+
+  int num_blocks = ceil((float)arr_size / CUDA_BLOCK_SIZE);
+  //T   boundary   = maximumElement<T>(vals_d, arr_size);
+
+  // Run indexing kernel
+  histVals2IndexKernel<T><<<num_blocks, CUDA_BLOCK_SIZE>>>
+    (vals_d, inds_d, arr_size, hist_size, boundary);
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaDeviceSynchronize() );
 }
 
 
@@ -138,7 +198,6 @@ unsigned long int largeHistogram(unsigned int image_size,
                                  T* d_image,
                                  unsigned int histogram_size,
                                  unsigned int* d_hist) {
-
 
   unsigned int chunk_size = ceil((float)image_size / HARDWARE_PARALLELISM);
   unsigned int block_workload = chunk_size * CUDA_BLOCK_SIZE;
@@ -246,4 +305,198 @@ unsigned long int naiveHistogram(unsigned int image_size,
   return elapsed;
 }
 
+
+template <class T>
+void naiveSquare(unsigned int tot_size,
+                 T*               h_in,
+                 T*              h_out){
+
+  unsigned int num_blocks = (unsigned int) ceil(((float)tot_size)/ ((float)CUDA_BLOCK_SIZE));  
+  // Initializes device arrays
+  T* d_in, *d_out;
+  gpuErrchk( cudaMalloc(&d_in, sizeof(T)*tot_size) );
+  gpuErrchk( cudaMalloc(&d_out, sizeof(T)*tot_size) );
+  gpuErrchk( cudaMemset(d_out, 0, sizeof(T)*tot_size) );
+
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+  gettimeofday(&t_start, NULL);
+  
+  gpuErrchk( cudaMemcpy(d_in, h_in, tot_size*sizeof(T), cudaMemcpyHostToDevice) );
+
+  // executes kernels
+  shitKernel<<<num_blocks,CUDA_BLOCK_SIZE>>>
+    (d_in, d_out, tot_size);
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaDeviceSynchronize() );
+
+  // copies memory back
+  gpuErrchk( cudaMemcpy(h_out, d_out, tot_size*sizeof(T), cudaMemcpyDeviceToHost) );
+  
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+  printf("square naive (GPU) in %d µs\n", elapsed);
+
+
+  // free device memory
+  cudaFree(d_in);
+  cudaFree(d_out);
+}
+
+
+// @summary : Takes an array and returns and array of squared elements
+// @remarks : Just give it a large input, and it will compute square of each element
+// @params  : array_size     -> size of image
+//          : h_in           -> input array
+//          : h_out          -> for all h_out[i] = h_in[i]^2
+
+template <class T>
+void asyncSquare(unsigned int array_size,
+                 T*                 h_in,
+                 T*                h_out){
+
+  unsigned int stream_entries = 2;
+  unsigned int stream_size = MAXIMUM_STREAM_SIZE*stream_entries;
+  unsigned int nStreams = 0;
+
+  while (nStreams < stream_entries) {
+    nStreams = ceil((float)array_size / stream_size);
+    stream_size = stream_size/2;
+  }
+  
+  unsigned int num_blocks = ceil((float)stream_size/CUDA_BLOCK_SIZE);
+
+  printf("number of streams : %d, stream_size : %d\n", nStreams, stream_size);
+  // Initializes device arrays
+  T* d_in, *d_out;
+  cudaMalloc((void**) &d_in, stream_size*stream_entries*sizeof(T));
+  cudaMalloc((void**) &d_out, stream_size*stream_entries*sizeof(T));
+
+  // Initailizes streams
+  cudaStream_t stream[stream_entries];
+  for (int i = 0; i < stream_entries; i++){
+    gpuErrchk( cudaStreamCreate(&stream[i]) );
+  }
+
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+  gettimeofday(&t_start, NULL);
+  for (int k = 0; k < nStreams; k++){
+    // copies to asynchronously to the streams
+    for (int i = 0; i < stream_entries; ++i) {
+      int offset = i * stream_size;
+      gpuErrchk( cudaMemcpyAsync(&d_in[offset], &h_in[k*offset],
+                                   stream_size*sizeof(T), cudaMemcpyHostToDevice, stream[i]));
+    }
+    
+    // executes kernels
+    for (int i = 0; i < stream_entries; ++i) {
+      int offset = i * STREAM_SIZE_GPU;
+      shitKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream[i]>>>
+        (&d_in[offset], &d_out[offset], offset);
+      gpuErrchk( cudaPeekAtLastError() );
+    }
+
+    // asynchronous copy back from device to host
+    for (int i = 0; i < stream_entries; ++i) {
+      int offset = i * stream_size;
+      gpuErrchk( cudaMemcpyAsync(&h_out[k*offset], &d_out[offset],
+                                 stream_size*sizeof(T), cudaMemcpyDeviceToHost, stream[i]));
+    }
+  }
+  
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+  printf("Square asynchronous (GPU) in %d µs\n", elapsed);
+
+  // Destroys streams once done
+  for(int i = 0; i < stream_entries; i++){
+    gpuErrchk( cudaStreamDestroy(stream[i]) );
+  }
+  
+  // free device memory
+  cudaFree(d_in);
+  cudaFree(d_out);
+}
+
+// @summary : Takes an array and returns and array of squared elements
+// @remarks : Just give it a large input, and it will compute square of each element
+// @params  : array_size     -> size of image
+//          : h_in           -> input array
+//          : h_out          -> for all h_out[i] = h_in[i]^2
+
+template <class T>
+void asyncHist(unsigned int  image_size,
+               T*               h_image,
+               unsigned int   hist_size,
+               unsigned int*      h_out,
+               T             h_boudnary){
+  
+  unsigned int stream_entries = 2;
+  unsigned int stream_size = MAXIMUM_STREAM_SIZE*stream_entries;
+  unsigned int nStreams = 0;
+
+  while (nStreams < stream_entries) {
+    nStreams = ceil((float)image_size / stream_size);
+    stream_size = stream_size/2;
+  }
+  stream_size = stream_size/2;
+  unsigned int num_blocks = ceil((float)stream_size/CUDA_BLOCK_SIZE);
+
+  // Initailizes streams
+  cudaStream_t stream[stream_entries];
+  for (int i = 0; i < stream_entries; i++){
+    gpuErrchk( cudaStreamCreate(&stream[i]) );
+  }
+  
+  // Initializes device arrays
+  T* d_image;
+  unsigned int* d_inds;
+  gpuErrchk( cudaMalloc((void**) &d_image, stream_size*stream_entries*sizeof(T)) );
+  gpuErrchk( cudaMalloc((void**)  &d_inds, stream_size*stream_entries*sizeof(int)) );
+  
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+  gettimeofday(&t_start, NULL);
+
+  for (int k = 0; k < nStreams; k++){
+    // copies to asynchronously to the streams
+    for (int i = 0; i < stream_entries; ++i) {
+      unsigned int offset = i * stream_size;
+      gpuErrchk( cudaMemcpyAsync(&d_image[offset], &h_image[k*offset],
+                                   stream_size*sizeof(T), cudaMemcpyHostToDevice, stream[i]));
+    }
+
+    //executes kernels
+    for (int i = 0; i < stream_entries; ++i) {
+      unsigned int offset = i * STREAM_SIZE_GPU;
+      histVals2IndexKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream[i]>>>
+        (&d_image[offset], &d_inds[offset], stream_size, hist_size, h_boudnary);
+      gpuErrchk( cudaPeekAtLastError() );
+      gpuErrchk( cudaDeviceSynchronize() );
+    }
+  
+    // asynchronous copy back from device to host
+    /* for (int i = 0; i < stream_entries; ++i) { */
+    /*   int offset = i * stream_size; */
+    /*   gpuErrchk( cudaMemcpyAsync(&h_out[k*offset], &d_out[offset], */
+    /*                              stream_size*sizeof(T), cudaMemcpyDeviceToHost, stream[i])); */
+    /* } */
+  }
+  
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+  printf("Square asynchronous (GPU) in %d µs\n", elapsed);
+
+  // Destroys streams once done
+  for(int i = 0; i < stream_entries; i++){
+    gpuErrchk( cudaStreamDestroy(stream[i]) );
+  }
+  
+  // free device memory
+  cudaFree(d_inds);
+  cudaFree(d_image);
+}
+
 #endif //HOST_HIST
+

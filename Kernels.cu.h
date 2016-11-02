@@ -2,7 +2,7 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
-// @summary : Computes the histogram indexes based on a normalization of the data
+// @summary : Computes the histogram indices based on a normalization of the data
 // @remarks : Assumes all values in the input array to be non-negative
 // @params  : input_arr_d -> the input values
 //          : hist_inds_d -> an array to write back the histogram indexes
@@ -139,4 +139,18 @@ __global__ void histKernel(unsigned int tot_size,
 
 }
 
+template <class T>
+__global__ void shitKernel(T* arr, 
+                           T* arr_out, 
+                           size_t tot_size){
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (gid < tot_size){
+    T tmp = arr[gid];
+    arr_out[gid] = tmp*tmp;
+  }
+}
+
+
 #endif //KERNELS_HIST
+
