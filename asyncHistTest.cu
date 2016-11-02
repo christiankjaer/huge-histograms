@@ -127,7 +127,7 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   cudaMalloc((void**)&d_hist_naive, hist_sz*sizeof(unsigned int));
   cudaMemcpy(d_data, data, image_sz*sizeof(T), cudaMemcpyHostToDevice);
   //  cudaMemcpy(d_hist_naive, hist_naive, _sz*sizeof(T), cudaMemcpyHostToDevice);
-  naiveHistogram<T>(image_sz, d_data, hist_sz, d_hist_naive);
+  //printf("HIST NAIVE (GPU) in %d µs\n", naiveHistogram<T>(image_sz, d_data, hist_sz, d_hist_naive));
   cudaMemcpy(hist_naive, d_hist_naive, hist_sz*sizeof(T), cudaMemcpyDeviceToHost);
   cudaFree(d_hist_naive);
   T max = maximumElement<T>(d_data, image_sz);
@@ -137,11 +137,11 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   
   compareTest<unsigned int>(hist, hist_naive, hist_sz);
 
-  printf("LARGE HISTOGRAM RESULTS\n");
-  printIntArraySeq(hist_naive, hist_sz);
-  printf("ASYNCHRONOUS HISTOGRAM RESULTS\n");
-  printIntArraySeq(hist, hist_sz);
-  printf("passed : %d\n", result);
+  // printf("LARGE HISTOGRAM RESULTS\n");
+  // printIntArraySeq(hist_naive, hist_sz);
+  // printf("ASYNCHRONOUS HISTOGRAM RESULTS\n");
+  // printIntArraySeq(hist, hist_sz);
+  printf("passed : %s\n", result ? "true" : "false");
   printf("LARGE SUM: %d, ASYNC SUM: %d\n", sumSeq(hist_naive, hist_sz), sumSeq(hist, hist_sz));
   
 
