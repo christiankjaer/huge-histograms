@@ -57,6 +57,37 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
   }
 }
 
+// @summary : Optimised histogram for #bins <= 4096
+//            Like the segmented version, but without
+//            the book keeping.
+__global__ void smallHistKernel(unsigned int  tot_size,
+                                unsigned int* inds,
+                                unsigned int  hist_size,
+                                unsigned int* hist) {
+
+  __shared__ unsigned int Hsh[GPU_HIST_SIZE];
+  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+  // Reset shared memory
+  for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i+= blockDim.x) {
+    Hsh[i] = 0;
+  }
+
+  __syncthreads();
+
+  // Write to block level histogram
+  if (gid < tot_size) {
+    atomicAdd(&Hsh[inds[gid]], 1);
+  }
+
+  __syncthreads();
+
+  // Copy back to memory
+  for (unsigned int i = threadIdx.x; i < hist_size; i+= blockDim.x) {
+    atomicAdd(&hist[i], Hsh[i]);
+  }
+}
+
 __global__ void histKernel(unsigned int tot_size,
                            unsigned int hist_size,
                            unsigned int chunk_size,
@@ -64,7 +95,7 @@ __global__ void histKernel(unsigned int tot_size,
                            unsigned int *inds,
                            unsigned int *hist) {
 
-  __shared__ int Hsh[GPU_HIST_SIZE];
+  __shared__ unsigned int Hsh[GPU_HIST_SIZE];
 
   unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;

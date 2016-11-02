@@ -176,6 +176,43 @@ unsigned long int largeHistogram(unsigned int image_size,
   return elapsed;
 }
 
+// @summary : Host wrapper for the segmented histogram
+//            kernel.
+template <class T>
+unsigned long int smallHistogram(unsigned int image_size,
+                                 T* d_image,
+                                 unsigned int histogram_size,
+                                 unsigned int* d_hist) {
+
+
+  unsigned int num_blocks = ceil((float)image_size / CUDA_BLOCK_SIZE);
+
+  unsigned int *d_inds;
+
+  gpuErrchk( cudaMalloc(&d_inds, sizeof(unsigned int)*image_size) );
+
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+
+  gettimeofday(&t_start, NULL);
+
+  histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
+
+  gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size) );
+
+  smallHistKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>
+    (image_size, d_inds, histogram_size, d_hist);
+
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaDeviceSynchronize() );
+
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+
+  cudaFree(d_inds);
+  return elapsed;
+}
+
 template <class T>
 unsigned long int naiveHistogram(unsigned int image_size,
                                  T* d_image,
