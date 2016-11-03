@@ -282,6 +282,6 @@ int main(int argc, char **argv) {
     sscanf(argv[2], "%u", &hist_sz);
   }
 
-  //test_small_hist<float>(image_sz, hist_sz);
-  bench_small_hist<float>(image_sz, hist_sz);
+  test_hist<float>(image_sz, hist_sz);
+  // bench_small_hist<float>(image_sz, hist_sz);
 }

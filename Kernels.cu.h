@@ -62,11 +62,13 @@ __global__ void naiveHistKernel(unsigned int  tot_size,
 //            the book keeping.
 __global__ void smallHistKernel(unsigned int  tot_size,
                                 unsigned int* inds,
+                                unsigned int  chunk_size,
                                 unsigned int  hist_size,
                                 unsigned int* hist) {
 
   __shared__ unsigned int Hsh[GPU_HIST_SIZE];
-  const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
+  const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
 
   // Reset shared memory
   for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i+= blockDim.x) {
@@ -76,8 +78,8 @@ __global__ void smallHistKernel(unsigned int  tot_size,
   __syncthreads();
 
   // Write to block level histogram
-  if (gid < tot_size) {
-    atomicAdd(&Hsh[inds[gid]], 1);
+  for (unsigned int i = gid; i < min(block_end, tot_size); i += blockDim.x) {
+    atomicAdd(&Hsh[inds[i]], 1);
   }
 
   __syncthreads();

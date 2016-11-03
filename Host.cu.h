@@ -185,7 +185,9 @@ unsigned long int smallHistogram(unsigned int image_size,
                                  unsigned int* d_hist) {
 
 
-  unsigned int num_blocks = ceil((float)image_size / CUDA_BLOCK_SIZE);
+  unsigned int chunk_size = ceil((float)image_size / HARDWARE_PARALLELISM);
+  unsigned int block_workload = chunk_size * CUDA_BLOCK_SIZE;
+  unsigned int num_blocks = ceil((float)image_size / block_workload);
 
   unsigned int *d_inds;
 
@@ -201,7 +203,7 @@ unsigned long int smallHistogram(unsigned int image_size,
   gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size) );
 
   smallHistKernel<<<num_blocks, CUDA_BLOCK_SIZE>>>
-    (image_size, d_inds, histogram_size, d_hist);
+    (image_size, d_inds, chunk_size, histogram_size, d_hist);
 
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
