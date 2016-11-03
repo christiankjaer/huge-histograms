@@ -1,0 +1,7 @@
+\BOOKMARK [1][-]{section.1}{Project Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Design Overview - From CPU to GPU}{}% 2
+\BOOKMARK [1][-]{section.3}{Overview of Implementation}{}% 3
+\BOOKMARK [2][-]{subsection.3.1}{Optimised for small histograms}{section.3}% 4
+\BOOKMARK [2][-]{subsection.3.2}{Optimised for large histograms}{section.3}% 5
+\BOOKMARK [1][-]{section.4}{}{}% 6
+\BOOKMARK [1][-]{section.5}{}{}% 7

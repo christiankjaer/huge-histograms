@@ -1,0 +1,8 @@
+\select@language {english}
+\contentsline {section}{\numberline {1}Project Introduction}{3}{section.1}
+\contentsline {section}{\numberline {2}Design Overview - From CPU to GPU}{3}{section.2}
+\contentsline {section}{\numberline {3}Overview of Implementation}{4}{section.3}
+\contentsline {subsection}{\numberline {3.1}Optimised for small histograms}{4}{subsection.3.1}
+\contentsline {subsection}{\numberline {3.2}Optimised for large histograms}{4}{subsection.3.2}
+\contentsline {section}{\numberline {4}}{5}{section.4}
+\contentsline {section}{\numberline {5}}{5}{section.5}
