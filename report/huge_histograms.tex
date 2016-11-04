@@ -215,7 +215,9 @@ The result of this is shown in table~\ref{table:nvprof0}.
             \tt{Histogram kernel}               & $446$  & $1433$ \\ \fatline
             \bf{Total}                          & $2628$ & $1970$ \\
         \end{tabular}\\
-        \captionof{table}{The time spent for various kernels}
+        \captionof{table}{
+          The time spent for various kernels,
+          at $10^6$ elements and $3.5 \cdot 10^4$ bins.}
         \label{table:nvprof0}
     \end{center}
 \end{table}
@@ -269,7 +271,8 @@ case with several calls to wrapper functions, which would require major
 rework in order to properly work.
 
 \section{Discussion}
-A short introduction, to the things we are going to discuss ?
+In this section, we give a short dicussion of the genreal problems that we have encountered,
+and ..
 
 \subsection{The problem with random access to global memory}
 In order to avoid evicting blocks from L1 cache until we are done working with them,
@@ -285,27 +288,27 @@ A comparison which is done best,
 simply by measuring performance on different implementations,
 which is exactly what we did.
 
-%% \subsection{About shared memory.}
-%% Shared memory is divided into equally-sized memory banks.
-%% Any memory read or write request made of $n$ addresses that fall in $n$
-%% distinct memory banks can be serviced simultaneously, yielding an overall bandwidth
-%% that is $n$ times as high as the bandwidth of a single module.
-%% However, if two memory requests fall in the same bank.
-%% The hardware resolves the conflict by serializing the requests,
-%% obviously decreasing throughput by a factor equal to the number of
-%% separate memory requests.
+\subsection{About shared memory.}
+Shared memory is divided into equally-sized memory banks.
+Any memory read or write request made of $n$ addresses that fall in $n$
+distinct memory banks can be serviced simultaneously, yielding an overall bandwidth
+that is $n$ times as high as the bandwidth of a single module.
+However, if two memory requests fall in the same bank.
+The hardware resolves the conflict by serializing the requests,
+obviously decreasing throughput by a factor equal to the number of
+separate memory requests.
 
-%% \subsection{Atomic addition}
-%% Imagine a histogram of size 1. Even though the thought is silly,
-%% it reveals a real bottleneck. Since all of the additions to the
-%% histogram must be atomic, the reduction part of the algorithm for
-%% such a small histogram (since all of the additions must be atomic)
-%% exposes exactly 0 parallelism! But as the size of the global histogram
-%% expands, this problem becomes smaller and smaller.
-%% Hence, we expect the parrallel implementation to perform better when the
-%% histogram size expands, for a fixed input data size.
+\subsection{Atomic addition}
+Imagine a histogram of size 1. Even though the thought is silly,
+it reveals a real bottleneck. Since all of the additions to the
+histogram must be atomic, the reduction part of the algorithm for
+such a small histogram (since all of the additions must be atomic)
+exposes exactly 0 parallelism! But as the size of the global histogram
+expands, this problem becomes smaller and smaller.
+Hence, we expect the parrallel implementation to perform better when the
+histogram size expands, for a fixed input data size.
 
-\subsection{utilizing all available parallelism}
+\subsection{Utilizing Available Parallelism}
 Theoretically, the amount of time needed to compute a histogram is
 proportional with the greatest number of additions to a single bin.
 In practice however, this is not the case,
@@ -320,11 +323,21 @@ to be computed per thread, and the available parallelism is the number of
 threads which can be run at the same time.
 
 \section{Conclusion}
-When computing large histograms,
-it is often the case, that neither the dataset,
-nor the global histogram itself fits into shared memory,
-and so the greatest work overhead in computing huge histograms,
-are related to memory access patterns. ... and there was much rejoicing ... jææææ...
+It is in fact possible, to write a computationally efficient and scalable CUDA kernel,
+to perform histogram computation for real world unsorted input data.
+However
+
+%% NEED TO ANSWER FROM PROBLEM STATEMENT.
+%% However, when it comes to real world unsorted data,
+%% histograms are computationally inefficient
+%% due to the random memory access caused by
+%% the counting of how many values fall into each bin.
+%% In this project, we implement a CUDA-based solution for building a 1D histogram
+%% in parallel and benchmark the scalability of our solution with
+%% the CPU and the naive GPU versions.
+%% We also investigate how to efficiently solve the problem when the dataset
+%% is larger than the available (device) memory on the GPU
+%% using streaming techniques.
 
 \section{Further improvements}
 Right now we are making a full pass over the index array to calculate
