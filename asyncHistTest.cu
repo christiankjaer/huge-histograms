@@ -107,6 +107,7 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   T* out_async = (T*)malloc(image_sz * sizeof(T));
   unsigned int* hist = (unsigned int*) malloc(hist_sz*sizeof(int));
   unsigned int* hist_naive = (unsigned int*) malloc(hist_sz*sizeof(int));
+  unsigned int* hist_cpu = (unsigned int*) malloc(hist_sz*sizeof(int));
   for (size_t i = 0; i < image_sz; i++) {
     data[i] = ((T)rand()/(T)RAND_MAX)*16;
     out[i] = (T) 0;
@@ -127,14 +128,31 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   cudaMalloc((void**)&d_hist_naive, hist_sz*sizeof(unsigned int));
   cudaMemcpy(d_data, data, image_sz*sizeof(T), cudaMemcpyHostToDevice);
   //  cudaMemcpy(d_hist_naive, hist_naive, _sz*sizeof(T), cudaMemcpyHostToDevice);
-  //printf("HIST NAIVE (GPU) in %d µs\n", naiveHistogram<T>(image_sz, d_data, hist_sz, d_hist_naive));
+  printf("HIST LARGE (GPU) in %d µs\n", largeHistogram<T>(image_sz, d_data, hist_sz, d_hist_naive));
   cudaMemcpy(hist_naive, d_hist_naive, hist_sz*sizeof(T), cudaMemcpyDeviceToHost);
   cudaFree(d_hist_naive);
+
+
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+  gettimeofday(&t_start, NULL);
+
+  //cpu_hist(image_sz, data, hist_sz, hist_cpu);
+
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+  printf("histogram (CPU) in %d µs\n", elapsed);
+
   T max = maximumElement<T>(d_data, image_sz);
   printf("Max elem: %5.4f\n", max);
   cudaFree(d_data);
+
   asyncHist<T>(image_sz, data, hist_sz, hist, max);
   
+
+
+  //compareTest<unsigned int>(hist, hist_naive, hist_sz);
+  //printf("how fast?\n");
   compareTest<unsigned int>(hist, hist_naive, hist_sz);
 
   // printf("LARGE HISTOGRAM RESULTS\n");
@@ -142,7 +160,7 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   // printf("ASYNCHRONOUS HISTOGRAM RESULTS\n");
   // printIntArraySeq(hist, hist_sz);
   printf("passed : %s\n", result ? "true" : "false");
-  printf("LARGE SUM: %d, ASYNC SUM: %d\n", sumSeq(hist_naive, hist_sz), sumSeq(hist, hist_sz));
+  //printf("LARGE SUM: %d, ASYNC SUM: %d\n", sumSeq(hist_naive, hist_sz), sumSeq(hist, hist_sz));
   
 
   cudaFree(d_data);

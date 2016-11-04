@@ -1,4 +1,5 @@
 #ifndef HOST_HIST
+
 #define HOST_HIST
 
 #include <stdlib.h>
@@ -6,6 +7,8 @@
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
+#include <mutex>          // std::mutex
+
 
 #include <cub/cub.cuh>
 #include "sequential/arraylib.cu.h"
@@ -132,8 +135,6 @@ void histVals2IndexDeviceMax (unsigned int    arr_size,
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
 }
-
-
 // @summary : partially sortes an index array in chunk size bounded segments
 void radixSortDevice(unsigned int* unsorted_d,
                      unsigned int* sorted_d,
@@ -143,8 +144,8 @@ void radixSortDevice(unsigned int* unsorted_d,
 
   void   *d_temp_storage    = NULL;
   size_t temp_storage_bytes = 0;
-
-
+  
+  
   // TODO : Figure out an intelligent way of computing end bit [-.-]
   int begin_bit = ceil(log2((float) GPU_HIST_SIZE));
   int end_bit   = max(begin_bit, (int)ceil(log2((float) hist_size)))+1;
@@ -173,6 +174,49 @@ void radixSortDevice(unsigned int* unsorted_d,
 }
 
 
+// @summary : partially sortes an index array in chunk size bounded segments
+void radixSortDeviceStream(unsigned int*   unsorted_d,
+                           unsigned int*     sorted_d,
+                           //void*       d_temp_storage,
+                           unsigned int  array_length,
+                           unsigned int     hist_size,
+                           cudaStream_t        stream){
+
+
+  void   *d_temp_storage    = NULL;
+  size_t temp_storage_bytes = 0;
+  
+  
+  // TODO : Figure out an intelligent way of computing end bit [-.-]
+  int begin_bit = ceil(log2((float) GPU_HIST_SIZE));
+  int end_bit   = max(begin_bit, (int)ceil(log2((float) hist_size)))+1;
+  // int end_bit = 8*sizeof(unsigned int);
+
+  // Figure out how much temporary storage is needed
+  gpuErrchk( cub::DeviceRadixSort::SortKeys(d_temp_storage,
+                                            temp_storage_bytes,
+                                            unsorted_d,
+                                            sorted_d,
+                                            array_length,
+                                            begin_bit,
+                                            end_bit,
+                                            stream));
+  gpuErrchk( cudaMalloc(&d_temp_storage, temp_storage_bytes) );
+  
+  // Call the library function
+  gpuErrchk (cub::DeviceRadixSort::SortKeys(d_temp_storage,
+                                            temp_storage_bytes,
+                                            unsorted_d,
+                                            sorted_d,
+                                            array_length,
+                                            begin_bit,
+                                            end_bit,
+                                            stream) );
+
+  cudaFree(d_temp_storage);
+}
+
+
 // @summary : Computes segment offsets for each
 //            segment into the index array
 void segmentOffsets(unsigned int  inds_size,
@@ -184,6 +228,20 @@ void segmentOffsets(unsigned int  inds_size,
   segmentOffsetsKernel<<<num_blocks, CUDA_BLOCK_SIZE>>> (inds_d, inds_size, segment_sizes_d);
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
+}
+
+// @summary : Computes segment offsets for each
+//            segment into the index array
+void segmentOffsetsStream(unsigned int  inds_size,
+                          unsigned int* inds_d,
+                          unsigned int* segment_sizes_d,
+                          cudaStream_t stream){
+
+  int num_blocks = ceil((float)inds_size / CUDA_BLOCK_SIZE);
+
+  segmentOffsetsKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream>>> (inds_d, inds_size, segment_sizes_d);
+  gpuErrchk( cudaPeekAtLastError() );
+  //gpuErrchk( cudaStreamSynchronize() );
 }
 
 // @summary : Host wrapper for the segmented histogram
@@ -211,7 +269,7 @@ unsigned long int largeHistogram(unsigned int image_size,
   gettimeofday(&t_start, NULL);
 
   histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
-
+  
   radixSortDevice(d_inds, d_sorted, image_size, histogram_size);
   segmentOffsets(image_size, d_sorted, d_sgm_offset);
 
@@ -288,6 +346,10 @@ unsigned long int naiveHistogram(unsigned int image_size,
   gettimeofday(&t_start, NULL);
 
   histVals2IndexDevice<T>(image_size, d_image, histogram_size, d_inds);
+  unsigned int* tmp_inds = (unsigned int*)malloc(image_size*sizeof(unsigned int));
+  cudaMemcpy(tmp_inds, d_inds , image_size*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  //printIntArraySeq(tmp_inds, image_size);
+  free(tmp_inds);
 
   gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*histogram_size) );
 
@@ -438,23 +500,51 @@ unsigned long int largeHistogramAsync(unsigned int image_size,
   unsigned long int elapsed;
   gettimeofday(&t_start, NULL);
 
+  
+  histVals2IndexKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream>>>
+    (d_image, d_inds, image_size, histogram_size, boundary);
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaStreamSynchronize(stream) );
 
-  histVals2IndexDeviceMax<T>(image_size, d_image, histogram_size, d_inds, boundary);
+  //histVals2IndexDeviceMax<T>(image_size, d_image, histogram_size, d_inds, boundary);
+  
+  /* unsigned int* tmp_inds = (unsigned int*)malloc(image_size*sizeof(unsigned int)); */
+  /* cudaMemcpy(tmp_inds, d_inds , image_size*sizeof(unsigned int), cudaMemcpyDeviceToHost); */
+  /* printf("inds raw\n"); */
+  /* printIntArraySeq(tmp_inds, image_size); */
 
+  radixSortDeviceStream(d_inds, d_sorted, image_size, histogram_size, stream);
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaStreamSynchronize(stream) );
+  //cudaMemcpy(tmp_inds, d_sorted , image_size*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  //printf("sorted\n");
+  //printIntArraySeq(tmp_inds, image_size);
+  /* cudaMemcpy(tmp_inds, d_sorted , image_size*sizeof(unsigned int), cudaMemcpyDeviceToHost); */
+  /* printf("inds sorted\n"); */
+  /* printIntArraySeq(tmp_inds, image_size); */
 
-  radixSortDevice(d_inds, d_sorted, image_size, histogram_size);
-
-  segmentOffsets(image_size, d_sorted, d_sgm_offset);
+  segmentOffsetsKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream>>> 
+    (d_sorted, image_size, d_sgm_offset);
+  //gpuErrchk( cudaPeekAtLastError() );
+  //segmentOffsetsStream(image_size, d_sorted, d_sgm_offset, stream);
   
   histKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream>>>
     (image_size, histogram_size, chunk_size, d_sgm_offset, d_sorted, d_hist);
 
+  
+
   // synchronizes Kernel given a stream, instead of globally synchronizing on all threads
   gpuErrchk( cudaPeekAtLastError() );
-  gpuErrchk( cudaStreamSynchronize(stream) );
   //gpuErrchk( cudaDeviceSynchronize() );
+  
+  //gpuErrchk( cudaStreamSynchronize(stream) );
+  
+  //  unsigned int* tmp = (unsigned int*)malloc(histogram_size*sizeof(unsigned int));
+  //cudaMemcpy(tmp, d_hist, histogram_size*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  //printIntArraySeq(tmp, histogram_size);
+  //free(tmp_inds);
+  //free(tmp);
 
- 
   gettimeofday(&t_end, NULL);
   elapsed = timeval_subtract(&t_end, &t_start);
 
@@ -475,14 +565,18 @@ void *launch_hist_kernel(void *hist_args)
   hist_arg_struct<T> *args = (hist_arg_struct<T> *) hist_args;
 
   // waits for previous kernels to finish up work before copying.
-  cudaEventSynchronize(args->event);
-
+  gpuErrchk( cudaStreamWaitEvent(args->stream, args->event_mem, 0) );
+  //printf("started?\n");
+  //cudaEventSynchronize(args->event);
+  pthread_mutex_lock(args->mutex);
   // copy data from host to device for thread segment
   gpuErrchk( cudaMemcpyAsync(&args->d_image[args->offset], 
                              &args->h_image[args->global_offset],
                              args->image_size*sizeof(T), 
                              cudaMemcpyHostToDevice, 
                              args->stream));
+  //gpuErrchk( cudaStreamSynchronize(args->stream) );
+  //gpuErrchk( cudaStreamWaitEvent(args->stream, args->event_mem, 0) );
 
   // computes histogram for thread segment, and commits to global device histogram
   unsigned long int elapsed = largeHistogramAsync<T>(args->image_size,
@@ -494,6 +588,11 @@ void *launch_hist_kernel(void *hist_args)
                                                      args->d_hist,
                                                      args->boundary,
                                                      args->stream);
+  
+  //printf("KERNEL FINISHED %d\n", elapsed);
+
+  pthread_mutex_unlock(args->mutex);
+  //cudaDeviceSynchronize();
   // Records event, giving waiting thread permission to use device memory
   gpuErrchk( cudaEventRecord(args->stop_event, args->stream) );
 
@@ -514,145 +613,143 @@ void asyncHist(unsigned int  image_size,
                unsigned int*     h_hist,
                T             h_boundary){
   
-  unsigned int stream_entries = 2;
-  unsigned int stream_size = MAXIMUM_STREAM_SIZE;
-  unsigned int nStreams = 0;
+
+  unsigned int stream_memory = ((hist_size > MAXIMUM_STREAM_SIZE) 
+                                ? CUDA_DEVICE_MEMORY - hist_size 
+                                : MAXIMUM_STREAM_SIZE);
   unsigned int num_segments = ceil((float)hist_size / GPU_HIST_SIZE);
+  unsigned int stream_entries = (stream_memory == (image_size*4 + num_segments)) ? 1 : 2;
+  //stream_entries = 2 ;
 
+  unsigned int stream_size = ceil((float)(stream_memory-num_segments)/4)/stream_entries;
+  unsigned int nStreams = ceil((float)image_size / stream_size);  
 
-  while (nStreams < stream_entries) {
-    stream_size = stream_size/2;
-    nStreams = ceil((float)image_size / stream_size);
-  }  
+  printf("HIST SIZE : %d\n", hist_size);
+  printf("MAXIMUM SIZE : %d\n", MAXIMUM_STREAM_SIZE);
+  printf("STREAM MEM : %d\n", stream_memory);
+  printf("STREAM ENTRIES : %d\n", stream_entries);
+  printf("STREAM SIZE : %d\n", stream_size);
+  printf("IMAGE SIZE : %d\n", image_size);
+  printf("STREAMS TO BE EXECUTED : %d\n", nStreams);
 
-  unsigned int num_blocks = ceil((float)stream_size/CUDA_BLOCK_SIZE);
-  unsigned int num_threads = nStreams;
-  printf("num_threads %d\n", num_threads);
-  pthread_t threads[num_threads];
-  
-  // Initailizes streams
-  cudaStream_t stream[stream_entries];
-
-  for (int i = 0; i < stream_entries; i++){
-    gpuErrchk( cudaStreamCreate(&stream[i]) );
-  }
-  // Event management
-  cudaEvent_t start[num_threads], stop[num_threads];
-
-  for (int i = 0; i < num_threads; i++) {
-    gpuErrchk( cudaEventCreate(&start[i]) );
-    gpuErrchk( cudaEventCreate(&stop[i]) );
-  }
-  
-  // Initializes device arrays
+ 
   T* d_image;
   unsigned int* d_inds, *d_sorted, *d_sgm_offset, *d_hist;
-  gpuErrchk( cudaMalloc((void**) &d_image,     stream_size*stream_entries*sizeof(T)) );
-  gpuErrchk( cudaMalloc((void**)  &d_inds,     stream_size*stream_entries*sizeof(int)) );
-  gpuErrchk( cudaMalloc((void**)&d_sorted,     stream_size*stream_entries*sizeof(int)) );
-  gpuErrchk( cudaMalloc((void**)&d_sgm_offset, num_segments*stream_entries*sizeof(int)) );
-  gpuErrchk( cudaMalloc((void**)&d_hist, stream_size*stream_entries*sizeof(int)) );
+  unsigned int all_mem_needed = (stream_entries 
+                                 * (2*stream_size*sizeof(int)
+                                    + num_segments*sizeof(int))
+                                 + hist_size*sizeof(int));
+  gpuErrchk( cudaMalloc((void**)     &d_image, stream_entries*stream_size*sizeof(T)) );
+  gpuErrchk( cudaMalloc((void**)      &d_inds,  all_mem_needed) );
+  //d_inds = d_image + stream_size*stream_entries*sizeof(T);
+  d_sorted = &d_inds[stream_size*stream_entries];
+  d_sgm_offset = &d_sorted[stream_size * stream_entries];
+  d_hist = &d_sgm_offset[num_segments * stream_entries];
+
   gpuErrchk( cudaMemset(d_hist, 0, sizeof(unsigned int)*hist_size) );
-
-  // iniatilizes argument structure
-  
-  hist_arg_struct<T>* args[num_threads];
-  for(int i = 0; i < num_threads; i++){
-    args[i] = new hist_arg_struct<T>;
-  }
-  /* args[0]->image_size = 0; */
-  /* printf("struct set : %d\n", args[0]->image_size); */
-
-  struct timeval t_start, t_end;
-  unsigned long int elapsed;
-  gettimeofday(&t_start, NULL);
 
   // TODO : Figure if shared memory will be conflicting
   //      : Spawn threads and compute inputs for each thread.
   //      : Ensure that correct memory is passed to each Kernel
   //      : See if still correct when using asonchronous memcpy
 
-  //unsigned int tid;
-  for (int k = 0; k < num_threads; k++){
-    printf("PROCESS : %d\n", k);
-    if (k == nStreams-1){
-      args[k]->image_size = image_size % stream_size;
-    } else {
-      args[k]->image_size = stream_size;
-    }
-
-    args[k]->h_image = h_image;
-    args[k]->d_image = d_image;
-    args[k]->boundary = h_boundary;
-    args[k]->d_inds = &d_inds[(k%stream_entries)*stream_size];
-    args[k]->d_sorted = &d_sorted[(k%stream_entries)*stream_size];
-    args[k]->d_sgm_offset = &d_sgm_offset[(k%stream_entries)*num_segments];
-
-    args[k]->histogram_size = hist_size;
-    args[k]->d_hist = d_hist;
-    args[k]->event = stop[k];
-    if (k < (num_threads-2)){
-      args[k]->stop_event = stop[k+2];
-    } else {
-      args[k]->stop_event = stop[k];
-    }
-    args[k]->stream = stream[k%stream_entries];
-    args[k]->stream_size = stream_size;
-    args[k]->offset = (k%stream_entries)*stream_size;
-    args[k]->global_offset = k*stream_size;
-    if (pthread_create(&threads[k], NULL, launch_hist_kernel<T>, (void*)args[k])) {
-      fprintf(stderr, "Error creating threadn");
-      return;
-    }
-    //gpuErrchk( cudaEventRecord(stop[k], stream[k]));
-    /* if(pthread_join(threads[k], NULL)) { */
-    /*   fprintf(stderr, "Error joining threadn"); */
-    /*   return; */
-    /* } */
-  }
-  printf("#############################\n");
-  for (int i = 0; i< num_threads; i++){
-    if(pthread_join(threads[i], NULL)) {
-      fprintf(stderr, "Error joining threadn");
-      return;
-    }
-  }
-
+  // Initailizes streams
+  cudaStream_t stream[stream_entries];
+  
   for (int i = 0; i < stream_entries; i++){
-    gpuErrchk( cudaEventRecord(stop[i], stream[i]));
+    gpuErrchk( cudaStreamCreate(&stream[i]) );
+    printf("STREAM CREATED : %d\n", stream[i]);
+    //pthread_mutex_init(&mutex[i], NULL);
   }
+  //unsigned int num_blocks = ceil((float)stream_size/CUDA_BLOCK_SIZE);
+  unsigned int offset, global_offset, img_sz, stream_nr;
 
 
+  struct timeval t_start, t_end;
+  unsigned long int elapsed;
+  gettimeofday(&t_start, NULL);
 
-  // synchronizes all work done on GPU
-  gpuErrchk( cudaDeviceSynchronize());
+  for (int k = 0; k < nStreams; ++k){
+    if (k == nStreams-1){
+      img_sz = image_size % stream_size;
+    } else {
+      img_sz = stream_size;
+    }
 
+
+    stream_nr = k % stream_entries;
+    offset = stream_nr*stream_size;
+    global_offset = k*stream_size;
+    
+    printf("############################\n", k);
+    printf("ITERATION : %d\n", k);
+    printf("OFFSET : %d\n", offset);
+    printf("GLOBAL_OFFSET : %d\n", global_offset);
+    printf("stream entry : %d\n", stream_nr);
+    printf("stream : %d\n", stream[stream_nr]);
+    //gpuErrchk( cudaStreamSynchronize(stream[stream_nr]) );
+    gpuErrchk( cudaMemcpyAsync(&d_image[offset], 
+                               &h_image[global_offset],
+                               img_sz*sizeof(T), 
+                               cudaMemcpyHostToDevice, 
+                               stream[stream_nr]));
+    
+    largeHistogramAsync<T>(img_sz,
+                           &d_image[offset],
+                           &d_inds[offset],
+                           &d_sorted[offset],
+                           &d_sgm_offset[stream_nr*num_segments],
+                           hist_size,
+                           d_hist,
+                           h_boundary,
+                           stream[stream_nr]);
+
+  }
+ 
+  for(int i = 0; i < stream_entries; ++i){
+    gpuErrchk( cudaStreamSynchronize(stream[i]) );
+    printf("Synched Stream : %d\n", stream[i]);
+  }
   gettimeofday(&t_end, NULL);
   elapsed = timeval_subtract(&t_end, &t_start);
-  printf("asynchronous histogram (GPU) in %d µs\n", elapsed);
+  printf("asynchronous histogram (GPU) in %d µs\n", elapsed);  
+  
+ 
+
+
+  gettimeofday(&t_start, NULL);
 
   // Copy back final histogram
   cudaMemcpy(h_hist, d_hist, sizeof(unsigned int) * hist_size, cudaMemcpyDeviceToHost);
-
+  gettimeofday(&t_end, NULL);
+  elapsed = timeval_subtract(&t_end, &t_start);
+  printf("copy back histogram (GPU) in %d µs\n", elapsed);  
+  
   // Destroys streams once done
-  for(int i = 0; i < stream_entries; i++){
+  for(int i = 0; i < stream_entries; ++i){
+
+
+    gpuErrchk( cudaStreamSynchronize(stream[i]) );
+    printf("Synched Stream : %d\n", stream[i]);
     gpuErrchk( cudaStreamDestroy(stream[i]) );
+    printf("Destroyed Stream : %d\n", stream[i]);
+    //pthread_mutex_destroy(&mutex[i]);
   }
 
   // Destroy events
-  for(int i = 0; i < num_threads; i++){
-    gpuErrchk( cudaEventDestroy(start[i]) );
-    gpuErrchk( cudaEventDestroy(stop[i]) );
-  }
+  /* for(int i = 0; i < nStreams; i++){ */
+  /*   gpuErrchk( cudaEventDestroy(start[i]) ); */
+  /*   gpuErrchk( cudaEventDestroy(stop[i]) ); */
+  /* } */
 
   // free device memory
   cudaFree(d_image);
   cudaFree(d_inds);
-  cudaFree(d_sorted);
-  cudaFree(d_sgm_offset);
-  cudaFree(d_hist);
+  /* cudaFree(d_sorted); */
+  /* cudaFree(d_sgm_offset); */
+  /* cudaFree(d_hist); */
 
 }
 
-#endif //HOST_HIST
 
+#endif //HOST_HIST

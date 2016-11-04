@@ -1,5 +1,6 @@
 #ifndef ARG_STRUCT
 #define ARG_STRUCT
+#include <pthread.h>
 
 // structures to pass arguments to thread when running asynchronous histogram computation
 template <class T> 
@@ -14,11 +15,13 @@ struct hist_arg_struct{
   unsigned int histogram_size; // histogram size
   unsigned int *d_hist;        // device histogram array
   cudaEvent_t event;           // thread event
+  cudaEvent_t event_mem;       // thread event
+  cudaEvent_t stop_event_mem;  // thread event
   cudaEvent_t stop_event;      // thread event
   cudaStream_t stream;         // thread stream
-  unsigned int stream_size;    // memory size for a stream
   unsigned int offset;         // stream offset
   unsigned int global_offset;  // stream offset
+  pthread_mutex_t *mutex;       // lock
 };// hist_arg_struct;
 
 #endif // ARG_STRUCT
