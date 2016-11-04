@@ -125,7 +125,7 @@ However, to fully utilize hardware parallelism we are likely to have
 each CUDA block working on a large subset of data that will
 span more than one \it{segment} (local histogram).\\
 The subset of data (or indices) a block handles is defined as the workload per thread
-(\tt{chunk size}) times the number of threads in a block (\tt{#thread pr block}).
+(\tt{chunk size}) times the number of threads in a block (\tt{\#thread pr block}).
 This workload depends on the size of the input data vs.
 total number of threads available, and is independent of the sorted segments.
 Thus, in each block we need to know when to flush a local histogram to global
@@ -190,53 +190,73 @@ of segment offsets.
 
 \section{Benchmarks}
 To evaluate our solution, we have benchmarked our implementation with
-a sufficiently large dataset.
+a sufficiently large dataset, in this case 10 million elements.
 We have kept the size of the input data constant,
 because we are testing whether our implementation is more
-efficient when the number of bins in the histogram increases.
-
-% \fig{graph-xbins}{some text}
-
+efficient when the number of bins in the histogram increases. The result
+can be seen on figure~\ref{fig:graph1}.
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.6\linewidth]{img/graphs/10M-varbins.pdf}
+    \caption{10 million elements with a variable bin count.}
+    \label{fig:graph1}
+\end{figure}
 The benchmark shows that somewhere between 300k and 400k bins,
 the optimised implementation is faster.
 This seems like a lot of bins,
 so we use nvprof to see what kernels dominate the runtime.
 The following measurements is for 10M elements and 350k bins.
+The result of this is shown in table~\ref{table:nvprof0}.
 
-\begin{center}
-  \begin{tabular}{l|r|r}
-    \bf{Kernel} & \bf{Optimised (us)} & \bf{Naive (us)}   \\ \fatline
-    \tt{Index and boundary calculation} & $537$  & $537$  \\ \hline
-    \tt{Segment offsets}                & $417$  & -      \\ \hline
-    \tt{Radix sort}                     & $1228$ & -      \\ \hline
-    \tt{Histogram kernel}               & $446$  & $1433$ \\ \fatline
-    \bf{Total}                          & $2628$ & $1970$ \\
-  \end{tabular}\\
-  \captionof{table}{Your caption here}
-  \label{table:nvprof0}
-\end{center}
+\begin{table}
+    \begin{center}
+        \begin{tabular}{l|r|r}
+            \bf{Kernel} & \bf{Optimised (us)} & \bf{Naive (us)}   \\ \fatline
+            \tt{Index and boundary calculation} & $537$  & $537$  \\ \hline
+            \tt{Segment offsets}                & $417$  & -      \\ \hline
+            \tt{Radix sort}                     & $1228$ & -      \\ \hline
+            \tt{Histogram kernel}               & $446$  & $1433$ \\ \fatline
+            \bf{Total}                          & $2628$ & $1970$ \\
+        \end{tabular}\\
+        \captionof{table}{The time spent for various kernels}
+        \label{table:nvprof0}
+    \end{center}
+\end{table}
 
 It seems like radix sort is very expensive.
 It takes almost the same time to do as the naive histogram kernel.
 On a more positive note the optimised histogram kernel is about 3 times as
 fast as the naive kernel. A possible explanation might be that radix sort
 from the Cub library sorts on more bits than we need. We also benchmark
-for a smaller dataset (1M).
+for a smaller dataset (1M). This can be seen on figure~\ref{fig:graph2}.
 
-%\fig{graph-smaller}{some text}
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.6\linewidth]{img/graphs/1M-varbins.pdf}
+    \caption{1 million elements with a variable bin count.}
+    \label{fig:graph2}
+\end{figure}
 
 The results are similar.
-We have also benchmarked the kernel optimised for smaller histograms.
-Again we keep the size of the input array constant, and vary the number of bins.
-
-%\fig{graph-cache-effect}{some text}
+We have also benchmarked the kernel optimised for smaller histograms. Again we keep the size of the input array constant, and vary the number of bins. The result can be seen on figure~\ref{fig:graph3} and on figure~\ref{fig:graph4}.
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.6\linewidth]{img/graphs/1M-smallvarbins.pdf}
+    \caption{1 million elements with a small variable bin count.}
+    \label{fig:graph3}
+\end{figure}
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.6\linewidth]{img/graphs/10M-smallvarbins.pdf}
+    \caption{10 million elements with a small variable bin count.}
+    \label{fig:graph4}
+\end{figure}
 
 The histogram kernel optimised for small histogram sizes is around
-20\% faster than the very simple naive version. Both implementations see a spike
+20-30\% faster than the very simple naive version. Both implementations see a spike
 around 1k bins.
-This is probably the sign of some cache effects.
-This is a pretty good result, and it confirms that it is a good idea to
-explicitly manage the cache, if you know about the distribution of the input data.
+This is probably the sign of some cache effects. They are also very slow for very few bins.
+This is because that we have a lot of synchronised writes to the same memory locations.
 
 \subsection{Asynchronous histogram computation}
 For the case where a histogram can still fit on the gpu, however
@@ -279,7 +299,7 @@ A comparison which is done best,
 simply by measuring performance on different implementations,
 which is exactly what we did.
 
-\subcection{About shared memory.}
+\subsection{About shared memory.}
 Shared memory is divided into equally-sized memory banks.
 Any memory read or write request made of $n$ addresses that fall in $n$
 distinct memory banks can be serviced simultaneously, yielding an overall bandwidth
