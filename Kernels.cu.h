@@ -20,21 +20,23 @@ __global__ void histVals2IndexKernel(T*            input_arr_d,
   }
 }
 
-// @summary : computes the offsets for each segment into
-//            the index array.
+// @summary : computes the offsets for each segment into the index array.
 __global__ void segmentOffsetsKernel(unsigned int* inds_d,
-    unsigned int  inds_size,
-    unsigned int* segment_offsets_d){
+                                     unsigned int  inds_size,
+                                     unsigned int* segment_offsets_d){
 
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid < inds_size){
     // assumes inds already partially sorted
     int this_segment = inds_d[gid] / GPU_HIST_SIZE;
     __syncthreads();
+
     if (gid == 0){
       segment_offsets_d[0] = 0;
-    } else {
+    }
+    else {
       int prev_segment = inds_d[gid-1] / GPU_HIST_SIZE;
+
       if (this_segment != prev_segment){
         segment_offsets_d[this_segment] = gid;
       }
@@ -48,7 +50,6 @@ __global__ void segmentOffsetsKernel(unsigned int* inds_d,
 __global__ void naiveHistKernel(unsigned int  tot_size,
                                 unsigned int* inds,
                                 unsigned int* hist) {
-
   // Thread index
   const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -74,14 +75,12 @@ __global__ void smallHistKernel(unsigned int  tot_size,
   for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i+= blockDim.x) {
     Hsh[i] = 0;
   }
-
   __syncthreads();
 
   // Write to block level histogram
   for (unsigned int i = gid; i < min(block_end, tot_size); i += blockDim.x) {
     atomicAdd(&Hsh[inds[i]], 1);
   }
-
   __syncthreads();
 
   // Copy back to memory
@@ -102,21 +101,21 @@ __global__ void histKernel(unsigned int tot_size,
   unsigned int gid = blockIdx.x * blockDim.x * chunk_size + threadIdx.x;
   const unsigned int block_end = (blockIdx.x + 1) * blockDim.x * chunk_size;
 
-  unsigned int curr_sgm = inds[blockIdx.x*blockDim.x*chunk_size] / GPU_HIST_SIZE;
+  unsigned int curr_sgm     = inds[blockIdx.x*blockDim.x*chunk_size] / GPU_HIST_SIZE;
   unsigned int num_segments = ceil((float)hist_size / GPU_HIST_SIZE);
 
   unsigned int sgm_start = sgm_offset[curr_sgm];
-  unsigned int sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
+  unsigned int sgm_end   = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
 
   // This loop makes sure that we only write the current segment
   // to global memory at one time.
   while (sgm_start < block_end) {
     // Reset the shared memory.
 
+    // Reset shared memory
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
       Hsh[i] = 0;
     }
-
     __syncthreads();
 
     // Updates into the local histogram
@@ -129,7 +128,7 @@ __global__ void histKernel(unsigned int tot_size,
     // Write back to global memory
     for (unsigned int i = threadIdx.x; i < GPU_HIST_SIZE; i += blockDim.x) {
       if (offset + i < hist_size) {
-         atomicAdd(&hist[i + offset], Hsh[i]);
+        atomicAdd(&hist[i + offset], Hsh[i]);
       }
     }
 
@@ -138,7 +137,6 @@ __global__ void histKernel(unsigned int tot_size,
     sgm_start = sgm_offset[curr_sgm];
     sgm_end = (curr_sgm + 1 < num_segments) ? sgm_offset[curr_sgm + 1] : tot_size;
   }
-
 }
 
 #endif //KERNELS_HIST
