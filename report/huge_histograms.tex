@@ -55,27 +55,14 @@
   \label{fig:#1}
 \end{figure}
 }
-% non-floating version of \fig
-\newcommand{\cfig}[3]{
-  \begin{center}
-    \includegraphics[width=#2mm]{./img/#1}
-  \captionof{figure}{#3}
-  \label{fig:#1}
-  \end{center}
-}
 \def\fatline{\Xhline{2\arrayrulewidth}}
 \renewcommand{\arraystretch}{1.3}
 \renewcommand{\tt}[1]{\texttt{#1}}
 \renewcommand{\bf}[1]{\textbf{#1}}
 \renewcommand{\it}[1]{\textit{#1}}
 
-
-% \renewcommand{\thesubsection}{Task \thesection.\alph{subsection})}
-
 % **************** Start Document *****************
 \begin{document}
-% to remake the front page : "cd frontpage ; make frontpage" {~_^}
-% it's a quick hack, but it works!
 \includepdf[pages=1]{./frontpage/frontpage.pdf}
 \tableofcontents
 \newpage
@@ -125,7 +112,7 @@ However, to fully utilize hardware parallelism we are likely to have
 each CUDA block working on a large subset of data that will
 span more than one \it{segment} (local histogram).\\
 The subset of data (or indices) a block handles is defined as the workload per thread
-(\tt{chunk size}) times the number of threads in a block (\tt{\#thread pr block}).
+(\tt{chunk\_size}) times the number of threads in a block (\tt{\#thread\_pr\_block}).
 This workload depends on the size of the input data vs.
 total number of threads available, and is independent of the sorted segments.
 Thus, in each block we need to know when to flush a local histogram to global
@@ -145,6 +132,8 @@ more elements than others, leading to bottlenecks where other blocks will
 wait for the overworked blocks to finish.
 
 \section{Overview of Implementation}
+..
+
 \fig{device-dia}{140}{Flow of data in our GPU implementation}
 
 \subsection{Optimised for small histograms}
@@ -156,7 +145,7 @@ entire histogram fits in the cache anyway.
 
 \begin{itemize}
 \item Reset the shared memory for the block.
-\item Write the indices (\tt{f(data[i]}) into the shared memory of the block.
+\item Write the indices (\tt{f(data[i])}) into the shared memory of the block.
 \item Commit the block level histogram to global memory.
 \end{itemize}
 
@@ -168,7 +157,7 @@ to make sure that the segments are written to the correct location in global mem
 \item
   Map f onto the data array
 \item
-  Partially sort the resulting indices into a number of equivalence classes (segments)
+  Partially sort the resulting indices into a number of equivalence classes (\it{segments})
 \item
   Calculate the offset for each segment into
   the partially sorted array of indices.
@@ -239,6 +228,7 @@ for a smaller dataset (1M). This can be seen on figure~\ref{fig:graph2}.
 
 The results are similar.
 We have also benchmarked the kernel optimised for smaller histograms. Again we keep the size of the input array constant, and vary the number of bins. The result can be seen on figure~\ref{fig:graph3} and on figure~\ref{fig:graph4}.
+
 \begin{figure}[htpb]
     \centering
     \includegraphics[width=0.6\linewidth]{img/graphs/1M-smallvarbins.pdf}
@@ -273,22 +263,10 @@ rework in order to properly work.
 \section{Discussion}
 A short introduction, to the things we are going to discuss ?
 
-
 \subsection{The problem with random access to global memory}
-A read to global memory causes a lookup into the L1 cache,
-if the data is not present there, it is searched in the L2 cache and so on.
-At each step out into the memory hierarchy,
-things become larger but slower and have lower bandwidths due to larger
-multiplexers and greater wire delays. Additionally,
-whenever something is read from global memory it is written back
-through the memory hierarchy, replacing something else.
-Hence, having threads access global memory at random greatly
-increases the probability of cache misses, which is not very good for performance.
-
-So in order to avoid evicting blocks from L1 cache,
-until we are done working with them, we want the cuda kernel to work at
-small local histograms which fit into shared memory,
-and then flush back into corresponding parts of the global histogram
+In order to avoid evicting blocks from L1 cache until we are done working with them,
+the cuda kernel has to work at small local histograms which fit into shared memory,
+then flush back into corresponding parts of the global histogram
 in sequential order. Effectively, this means partially sorting the
 input data into segments, such that all values in a segment,
 contributes to the same small \tt{gpu\_hist\_size} number of bins.
@@ -299,29 +277,25 @@ A comparison which is done best,
 simply by measuring performance on different implementations,
 which is exactly what we did.
 
-\subsection{About shared memory.}
-Shared memory is divided into equally-sized memory banks.
-Any memory read or write request made of $n$ addresses that fall in $n$
-distinct memory banks can be serviced simultaneously, yielding an overall bandwidth
-that is $n$ times as high as the bandwidth of a single module.
-However, if two memory requests fall in the same bank.
-The hardware resolves the conflict by serializing the requests,
-obviously decreasing throughput by a factor equal to the number of
-separate memory requests.
+%% \subsection{About shared memory.}
+%% Shared memory is divided into equally-sized memory banks.
+%% Any memory read or write request made of $n$ addresses that fall in $n$
+%% distinct memory banks can be serviced simultaneously, yielding an overall bandwidth
+%% that is $n$ times as high as the bandwidth of a single module.
+%% However, if two memory requests fall in the same bank.
+%% The hardware resolves the conflict by serializing the requests,
+%% obviously decreasing throughput by a factor equal to the number of
+%% separate memory requests.
 
-
-\subsection{Atomic addition}
-(the reason why the parallel version performs better for greater size histograms).
-
-Imagine a histogram of size 1. Even though the thought is silly,
-it reveals a real bottleneck. Since all of the additions to the
-histogram must be atomic, the reduction part of the algorithm for
-such a small histogram (since all of the additions must be atomic)
-exposes exactly 0 parallelism! But as the size of the global histogram
-expands, this problem becomes smaller and smaller.
---Our focus will not be of the small histogram, and therefore we won’t be
-looking into pitfalls caused by histograms with a size of less than what
-can fit into shared memory on GPU. --Giver det mening??
+%% \subsection{Atomic addition}
+%% Imagine a histogram of size 1. Even though the thought is silly,
+%% it reveals a real bottleneck. Since all of the additions to the
+%% histogram must be atomic, the reduction part of the algorithm for
+%% such a small histogram (since all of the additions must be atomic)
+%% exposes exactly 0 parallelism! But as the size of the global histogram
+%% expands, this problem becomes smaller and smaller.
+%% Hence, we expect the parrallel implementation to perform better when the
+%% histogram size expands, for a fixed input data size.
 
 \subsection{utilizing all available parallelism}
 Theoretically, the amount of time needed to compute a histogram is
