@@ -106,9 +106,9 @@ The unoptimised pseudo-code for a 1D histogram
 would look something like:
 
 \begin{verbatim}
-Forall (i = 0; i < size(data); i++)
-    Idx = f(data[i])
-    hist[Idx]++ // Must be atomic
+forall (i = 0; i < size(data); i++)
+    idx = f(data[i])
+    hist[idx]++ // Must be atomic
 \end{verbatim}
 
 For an efficient parallel implementation on the GPU,
@@ -133,7 +133,7 @@ memory and start a new segment.
 The problem is illustrated in \Cref{fig:overview} where e.g.
 $block_0$ spans $segment_0$ and $segment_1$.
 
-\fig{overview}{140}{the general idea}
+\fig{overview}{140}{General idea of the algorithm}
 
 Letting a block handle overlapping segments (i.e. creating more local histograms)
 is preferable to a more naïve implementation where a block is spawned
@@ -145,7 +145,7 @@ more elements than others, leading to bottlenecks where other blocks will
 wait for the overworked blocks to finish.
 
 \section{Overview of Implementation}
-\fig{device-dia}{140}{figuretext}
+\fig{device-dia}{140}{Flow of data in our GPU implementation}
 
 \subsection{Optimised for small histograms}
 The first step towards the algorithm described previously is an implementation
