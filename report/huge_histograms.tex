@@ -132,16 +132,22 @@ more elements than others, leading to bottlenecks where other blocks will
 wait for the overworked blocks to finish.
 
 \section{Overview of Implementation}
-..
-
+In this section, we give a quick overview of our implementation. We describe
+an implementation with shared memory, but without the bookkeeping needed for
+histograms larger than what fits in shared memory on the GPU. Then we describe
+an implementation with the proper bookkeeping for histograms of arbitrary size.
 \fig{device-dia}{140}{Flow of data in our GPU implementation}
 
 \subsection{Optimised for small histograms}
 The first step towards the algorithm described previously is an implementation
 for histograms less than the size of the shared memory for each CUDA block.
-In our case that is 4096/8192 elements (depending on the configuration).
-This is just a way of explicitly managing the cache on the CPU, because the
-entire histogram fits in the cache anyway.
+In our case that is 4096/8192 elements (depending on the configuration). This
+is because each CUDA block has around 8000 words of memory available. The reason
+for making the amount of shared memory less than this, is that the hardware can
+reconfigure parts of shared memory to function as a cache, and therefore speeding
+up other memory accesses.
+
+The algorithm is roughly as follows.
 
 \begin{itemize}
 \item Reset the shared memory for the block.
@@ -150,8 +156,8 @@ entire histogram fits in the cache anyway.
 \end{itemize}
 
 \subsection{Optimised for large histograms}
-This is the version of the previous algorithm with additional bookkeeping
-to make sure that the segments are written to the correct location in global memory.
+To make an implementation for larger histograms, we need to do a lot more
+bookkeeping. This is done in the following manner.
 
 \begin{itemize}
 \item
@@ -171,6 +177,8 @@ to make sure that the segments are written to the correct location in global mem
   we commit the block level histogram to global memory with a certain
   offset and continue with the next segment in the same manner.
 \end{itemize}
+
+A flow of the code is shown on figure~\ref{fig:device-dia}.
 
 A lot of details are left out, but they are very specific to the hardware,
 and it is a lot easier just to read the CUDA implementation.
