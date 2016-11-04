@@ -258,17 +258,50 @@ around 1k bins.
 This is probably the sign of some cache effects. They are also very slow for very few bins.
 This is because that we have a lot of synchronised writes to the same memory locations.
 
-\subsection{Asynchronous histogram computation}
-For the case where a histogram can still fit on the gpu, however
-we wish to look at the case where the remaining memory does not suffice
-for data input.
-In cuda the streaming module can be used for this, which in short diverts
-from using default stream in order to distribute bandwidth between processes.
-This allows for asynchronous memory copying, thus granting the GPU time to
-work on a subpart, whilst receiving new data input. Cuda supports streaming,
-but happen to be far simpler if a direct kernel call is made. Rather than our
-case with several calls to wrapper functions, which would require major
-rework in order to properly work.
+\subsection{Streaming histogram computation}
+For histograms larger than what fits in global memory on the device, we would like to split
+the input array into smaller chunks, and work on them in turn. This gives rise to the possibility
+of using streaming in order to fully utilize the hardware. In this case we would like to overlap
+computation with copying.
+
+CUDA streams gives us the possibility to do this in a fashion shown on figure~\ref{fig:cuda-stream}.
+The figure shows copying to the device (HD), histogram computation (K) and copying back the resulting histogram (DH).
+
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.8\linewidth]{img/cuda-stream.pdf}
+    \captionof{table}{Using streams to overlap copying with computation.}
+    \label{fig:cuda-stream}
+\end{figure}
+
+For this to work, we need to allocate buffers corresponding to 2 histogram computations.
+Then while one buffer is filling up, we are calculating a histogram from the other
+buffer. Both are commited to the same histogram.
+
+Because memory copying vastly dominates the runtime of the implementation (90\%),
+there is no need to use the optimsed histogram implementation, because the runtime
+is limited by the fact that memory transfers are sequential.
+
+We measure this by benchmarking with 1 stream, with 2 streams and on the CPU. 1 stream
+is to check whether memory transfers are the dominating factor.
+
+\begin{table}[htpb]
+    \centering
+    \begin{tabular}{l l}
+        Method & Time \\
+        \hline
+        CPU & 4.6 s \\
+        1 stream & 2.5 s \\
+        2 streams & 2.5 s \\
+        \hline
+    \end{tabular}
+    \caption{Time of streaming to the device}
+    \label{tab:stream}
+\end{table}
+We test with a data size of 1G elements, and 400k bins. The result is shown in table~\ref{tab:stream}.
+
+This is what we expected, because we deal with a lot of data, and memory transfers to the GPU is
+relatively slow compared to computations.
 
 \section{Discussion}
 In this section, we give a short dicussion of the genreal problems that we have encountered,
