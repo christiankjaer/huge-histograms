@@ -7,11 +7,15 @@ default:
 histtest: NaiveHistTest.cu
 	$(nvcom) -o histtest NaiveHistTest.cu
 
+stream: StreamHistTest.cu
+	$(nvcom) -o stream StreamHistTest.cu
+
 clean:
 	rm -f ./hist
 	rm -f ./tests
 	rm -f ./segind
 	rm -f histtest
+	rm -f stream
 
 segind:
 	make -s recompile
