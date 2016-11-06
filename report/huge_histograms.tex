@@ -71,12 +71,11 @@
 A histogram is a density estimate over a distribution of data.
 It is quintessential to quality control, distribution estimation
 and similarity measures when working with large datasets.
-As it scales with the size of the input,
+As the time it takes to compute the histogram scales with the size of the input,
 a parallel solution is preferable when the input is large.
 However, when it comes to real world unsorted data,
 histograms are computationally inefficient
-due to the random memory access pattern, caused by
-the counting of how many values fall into each bin.
+due to the random memory access pattern related to counting of how many values fall into each bin.
 In this project, we implement a CUDA-based solution for building a 1D histogram
 in parallel and benchmark the scalability of our solution with
 the CPU and a naive GPU version.
@@ -87,28 +86,27 @@ using streaming techniques.
 \section{Design Overview - From CPU to GPU}
 Building a histogram in parallel is a straightforward map-reduce problem.
 It can be thought of as simplistic kernel density estimation,
-where a function $f$ maps frequencies of data \tt{vals} over bins \tt{inds}
+where a function $f$ maps frequencies of \tt{data} over bins \tt{inds}
 and reduces by counting how many values falls into each bin.
-Hence, pseudo-code for a 1D histogram would look something like:
+Hence, pseudo-code for a 1D histogram would look something lke:
 
 \begin{verbatim}
 forall (i = 0; i < size(data); i++)
-    idx = f(data[i])
+    inds = f(data[i])
     hist[idx]++ // Must be atomic
 \end{verbatim}
 
-Unfortunately, writing an efficient parallel implementation,
-yields a number of problems relating to memory performance,
-as the unknown order of indices from the map-phase,
+Unfortunately, writing an efficient parallel implementation
+yields a number of problems related to memory performance.
+One of these is the unknown order of indices from the map-phase which
 prevents us from working with the data in a coalesced
 manner during the reduce-phase.
 
 \subsection{Optimising for Memory Performance}
-Since, the \tt{inds} array is unpredictable,
+Since the \tt{inds} array is unpredictable,
 we expect worse cache performance with an increasing number of bins.
 Hence, to avoid unnessesarily evicting blocks,
-the cuda kernel has to work at small local histograms which fit into shared memory,
-and flush back into corresponding parts of the global histogram.
+the cuda kernel has to work at small local histograms which fit into shared memory, and flush back into corresponding parts of the global histogram.
 Effectively, this means partially sorting the
 input data into \it{segments}, where the values in a particular \it{segment}
 are numbers who all contribute to the same small \tt{gpu\_hist\_size} number of bins.\\
@@ -347,13 +345,13 @@ relatively slow compared to computations.
 
 \section{Discussion}
 % TODO : better introduce the discussion section.
-In this section, we give a short dicussion of the genreal problems that we have encountered.
+In this section, we give a short dicussion of the general problems that we have encountered.
 
 \subsection{Atomic addition}
-Imagine a histogram of size 1. Even though the thought is silly,
-it reveals a real bottleneck. Since all of the additions to the
+Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
+the idea reveals a real bottleneck. Since all additions to the
 histogram must be atomic, the reduction part of the algorithm for
-such a small histogram (since all of the additions must be atomic)
+such a small histogram
 exposes exactly 0 parallelism! But as the size of the global histogram
 expands, this problem becomes smaller and smaller.
 Hence, we expect the parrallel implementation to perform better when the
@@ -385,7 +383,7 @@ significant factor: 15\% from the segment offsets, and 20\% from the index calcu
 It is in fact possible, to write a computationally efficient and scalable CUDA kernel,
 to perform histogram computation for real world unsorted input data.
 However the overhead from copying data,
-causes the speedup from such an implementation to be much less significant than expected.
+causes the speedup from such an implementation to be much less significant than expected. Using streamning to hide memory latency only has an application if the computation time of kernels were larger (i.e. more work per thread is needed for efficiency).
 
 %% \section{Further improvements}
 %% Right now we are making a full pass over the index array to calculate
