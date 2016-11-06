@@ -107,7 +107,7 @@ Since the \tt{inds} array is unpredictable,
 we expect worse cache performance with an increasing number of bins.
 Hence, to avoid unnessesarily evicting blocks,
 the cuda kernel has to work at small local histograms which fit into shared memory, and flush back into corresponding parts of the global histogram.
-Effectively, this means partially sorting the
+In practice, this means partially sorting the
 input data into \it{segments}, where the values in a particular \it{segment}
 are numbers who all contribute to the same small \tt{gpu\_hist\_size} number of bins.\\
 Since the \tt{gpu\_hist\_size} is a fixed number
@@ -115,7 +115,8 @@ decided by the number of bins which can be held in the shared device memory,
 and the segment which a particular index value falls into
 is just (\tt{index\_value / gpu\_hist\_size}),
 we decided to partially sort the indexes by the bits more significant than those
-lower than \tt{gpu\_hist\_size} using radixSort.
+lower than \tt{gpu\_hist\_size} using radixSort. Radix sort has an efficient GPU
+implementation in the Cub library for the CUDA API\footnote{\url{https://nvlabs.github.io/cub/}}.
 
 
 \subsection{A Memory Effecient Algorithm}
@@ -128,13 +129,15 @@ For us this means dividing the workload into
 equally sized \it{chunks}, such that the size of a \it{chunk} is
 \tt{total\_workload / hardware\_parallelism},
 where the total workload is the size of the data input,
-and the available hardware parallelism is the total number of threads available.\\
+and the available hardware parallelism is the total number of threads available.
+
 This is achived by having each CUDA block create a local histogram in shared memory
 which is atomically added to a global histogram residing on the GPU.
 It is very likely that some blocks working on such large subsets of data will
-be working on more than one \it{segment}.\\
+be working on more than one \it{segment}.
+
 So, in each CUDA block we need to know when to flush a local histogram to global
-memory and start working on a one.
+memory and start working on another one.
 The subset of values that a block handles is defined as the \tt{chunk\_size}
 multiplied by the number of threads in a block (\tt{\#thread\_pr\_block}).
 A high level example of such an algorithm is illustrated in \Cref{fig:overview}
@@ -144,7 +147,7 @@ where e.g. $block_0$ spans $segment_0$ and $segment_1$.
 
 Letting a block handle overlapping segments (i.e. creating more local histograms)
 is preferable to a more naïve implementation where a block is spawned
-for each segment. Since there is no way to guarantee that all blocks have
+for each segment. This is because there is no way to guarantee that all blocks have
 roughly the same workload.
 One could easily have a case where certain segments have significantly
 more elements than others, leading to bottlenecks where other blocks will
@@ -176,12 +179,16 @@ The algorithm is roughly:
 \item Commit the block level histogram to global memory.
 \end{itemize}
 
+We also divide the input array into chunks, to avoid having to flush the
+local histogram too often. This is done in the way described in the previous section
+such that we still exploit all available parallelism.
+
 \subsection{Optimised for large histograms}
 For larger histograms, the algorithm needs an expansion in the form
-of extra bookkeeping, which depends on a small amount of extra metadata, and
+of extra bookkeeping, which depends on a small amount of extra information, and
 the input data invariant, that all elements which belongs to the same segment,
-are located consequtively in the \tt{inds} array.
-The metadata needed, is then a small \tt{segment\_offset} array,
+are located consecutively in the \tt{inds} array.
+The extra information needed, is then a small \tt{segment\_offset} array,
 containing the indices into \tt{inds}, at where each new \it{segment} begins.
 
 The optimized algorithm is roughly:
@@ -207,7 +214,7 @@ The optimized algorithm is roughly:
 \begin{enumerate}
 \item Map f onto the data array
 \item Partially sort the resulting indices into segments
-\item Figure out which segment we are currently working
+\item Figure out which segment we are currently working on
 \item Reset the shared memory for the CUDA block
 \item Write the indices modulo the \tt{gpu\_hist\_size} into shared memory.
 \item If we ended a segment $\Rightarrow$ commit the block level histogram to global memory,
@@ -217,7 +224,7 @@ The optimized algorithm is roughly:
 
 Since most of the details are very hardware specific,
 we suggest reading the CUDA implementation for more details.
-However, we have a flowchart of the code can be found in \Cref{fig:device-dia}.
+However, we have a flowchart of the code that can be found in \Cref{fig:device-dia}.
 
 \section{Benchmarks}
 To evaluate our implementation, we have benchmarked it against
@@ -234,7 +241,7 @@ The result can be seen on figure~\ref{fig:graph1}.
     \label{fig:graph1}
 \end{figure}
 
-The benchmark illustrated in \Cref{fig:graph2} and \Cref{fig:graph3}
+The benchmark illustrated in \Cref{fig:graph1}
 shows that somewhere between 300k and 400k bins
 the optimised implementation is faster.
 This seems like a lot of bins,
@@ -297,7 +304,46 @@ This is probably the sign of some cache effects.
 They are also very slow for very few bins.
 This is because that we have a lot of synchronised writes to the same memory locations.
 
+
+\section{Discussion}
+% TODO : better introduce the discussion section.
+In this section, we give a short dicussion of the general problems that we have encountered.
+
+\subsection{Atomic addition}
+Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
+the idea reveals a real bottleneck. Since all additions to the
+histogram must be atomic, the reduction part of the algorithm for
+such a small histogram
+exposes exactly 0 parallelism! But as the size of the global histogram
+expands, this problem becomes smaller and smaller.
+Hence, we expect the parrallel implementation to perform better when the
+histogram size expands, for a fixed input data size.
+An example of this effect can be seen in \Cref{fig:graph4}.
+
+\subsection{The Expense of Sorting}
+Unfortunately, sorting data and keeping track of segments
+introduces great deal of extra work, whose expense has to be compared
+with the cost from being very non cache-effective.
+A comparison which is done best, simply by measuring performance on
+different implementations, which is exactly what we did.
+
+\subsection{Fusing Kernels, a future improvement}
+In the current, as shown in \Cref{fig:seg-offsets} computing the \tt{segment\_offset} array,
+requres full pass over the \tt{inds}. Futhermore, the mapping of $f$, also requires a full pass.
+
+Since the histogram kernel already does a full pass,
+it is safe to assume, that the three kernels can be fused together.
+On success, this would reduce the time computing the histogram with a
+significant factor: 15\% from the segment offsets, and 20\% from the index calculation according to
+\Cref{table:nvprof0}.
+
+\fig{seg-offsets}{140}{How we curently compute segment offsets.}
+
 \subsection{Streaming histogram computation}
+The profiling also showed that a lot of time was spent on copying data to the device,
+though we did not include those numbers in the benchmarks themselves. In a real
+world scenario you would at some point need to copy a lot of data to the device.
+
 For histograms larger than what fits in global device memory, we would like to split
 the input array into smaller chunks, and work on them in turn.
 This gives rise to the possibility of using streaming in order better utilize the hardware.
@@ -342,42 +388,6 @@ is to check whether memory transfers are the dominating factor.
 We test with a data size of 1G elements, and 400k bins. The result is shown in table~\ref{tab:stream}.
 This is what we expected, because we deal with a lot of data, and memory transfers to the GPU is
 relatively slow compared to computations.
-
-\section{Discussion}
-% TODO : better introduce the discussion section.
-In this section, we give a short dicussion of the general problems that we have encountered.
-
-\subsection{Atomic addition}
-Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
-the idea reveals a real bottleneck. Since all additions to the
-histogram must be atomic, the reduction part of the algorithm for
-such a small histogram
-exposes exactly 0 parallelism! But as the size of the global histogram
-expands, this problem becomes smaller and smaller.
-Hence, we expect the parrallel implementation to perform better when the
-histogram size expands, for a fixed input data size.
-An example of this effect can be seen in \Cref{fig:graph4}.
-
-\subsection{The Expense of Sorting}
-Unfortunately, sorting data and keeping track of segments
-introduces great deal of extra work, whose expense has to be compared
-with the cost from being very non cache-effective.
-A comparison which is done best, simply by measuring performance on
-different implementations, which is exactly what we did.
-
-\subsection{Fusing Kernels, a future improvement}
-In the current, as shown in \Cref{fig:seg-offsets} computing the \tt{segment\_offset} array,
-requres full pass over the \tt{inds}. Futhermore, the mapping of $f$, also requires a full pass.
-
-Since the histogram kernel already does a full pass,
-it is safe to assume, that the three kernels can be fused together.
-On success, this would reduce the time computing the histogram with a
-significant factor: 15\% from the segment offsets, and 20\% from the index calculation according to
-\Cref{table:nvprof0}.
-
-\fig{seg-offsets}{140}{How we curently compute segment offsets.}
-
-%\subsection{} % MISSING : discussion about streaming.
 
 \section{Conclusion}
 It is in fact possible, to write a computationally efficient and scalable CUDA kernel,
