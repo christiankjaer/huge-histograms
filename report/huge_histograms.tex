@@ -375,24 +375,26 @@ Because memory copying vastly dominates the runtime of the implementation (90\%)
 there is no need to use the optimsed histogram implementation, because the runtime
 is limited by the fact that memory transfers are sequential.
 
-We measure this by benchmarking with 1 stream, with 2 streams and on the CPU. 1 stream
-is to check whether memory transfers are the dominating factor.
+We measure this by benchmarking with 1, 2 and 4 streams and on the CPU. 1 stream
+is to check whether memory transfers are the dominating factor. This is because
+using 1 stream makes sure that all the kernels are non-overlapping.
 
 \begin{table}[htpb]
     \centering
     \begin{tabular}{l l}
         Method & Time \\
         \hline
-        CPU & 4.6 s \\
-        1 stream  & 2.5 s \\
-        2 streams & 2.5 s \\
+        CPU & 9.64 s \\
+        1 stream  & 4.91 s \\
+        2 streams & 4.84 s \\
+        4 streams & 4.92 s \\
         \hline
     \end{tabular}
     \caption{Time of streaming to the device}
     \label{tab:stream}
 \end{table}
 
-We test with a data size of 1G elements, and 400k bins. The result is shown in table~\ref{tab:stream}.
+We test with a data size of 2G elements, and 400k bins. The result is shown in table~\ref{tab:stream}.
 This is what we expected, because we deal with a lot of data, and memory transfers to the GPU is
 relatively slow compared to computations.
 
