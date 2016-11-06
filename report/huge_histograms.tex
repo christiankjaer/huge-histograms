@@ -126,7 +126,7 @@ Since the \tt{gpu\_hist\_size} is a fixed number
 decided by the number of bins which can be held in the shared device memory,
 and since the segment that a particular index value falls into
 is (\tt{index\_value / gpu\_hist\_size}),
-we decided to partially sort the indexes by bits that are more significant than those
+we decided to partially sort the indices by bits that are more significant than those
 lower than \tt{gpu\_hist\_size} using radix sort. Radix sort has an efficient GPU
 implementation in the Cub library for the CUDA API\footnote{\url{https://nvlabs.github.io/cub/}}.
 
@@ -320,6 +320,12 @@ This is because that we have a lot of synchronised writes to the same memory loc
 \section{Discussion}
 
 \subsection{Atomic addition}
+Using the atomic addition yiels specific corner case issues, 
+in the case for which we find a large number of datapoints fall into the same bin. 
+This cause for a more sequential execution, although we work in shared memory, 
+the wait between threads to access the same local histogram index cause for delay.
+
+
 Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
 the idea reveals a real bottleneck. Since all additions to the
 histogram must be atomic, the reduction part of the algorithm for
