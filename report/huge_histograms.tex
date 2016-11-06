@@ -282,7 +282,7 @@ fast as the naive kernel.
 A possible explanation might be that radix sort from the Cub library
 sorts on more bits than we need.
 We also benchmark for a smaller dataset (1M).
-This can be seen on figure~\ref{fig:graph2}.
+This can be seen on figure~\ref{fig:graph2}. The results are similar.
 
 \begin{figure}[htpb]
     \centering
@@ -291,8 +291,8 @@ This can be seen on figure~\ref{fig:graph2}.
     \label{fig:graph2}
 \end{figure}
 
-The results are similar.
-We have also benchmarked the kernel optimised for smaller histograms. Again we keep the size of the input array constant, and vary the number of bins. The result can be seen on figure~\ref{fig:graph3} and on figure~\ref{fig:graph4}.
+
+We have also benchmarked the kernel optimised for smaller histograms. Again we keep the size of the input array constant and vary the number of bins. The result can be seen on figure~\ref{fig:graph3} and on figure~\ref{fig:graph4}. 
 
 \begin{figure}[htpb]
     \centering
@@ -318,8 +318,6 @@ This is because that we have a lot of synchronised writes to the same memory loc
 
 
 \section{Discussion}
-% TODO : better introduce the discussion section.
-In this section, we give a short dicussion of the general problems that we have encountered.
 
 \subsection{Atomic addition}
 Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
@@ -334,10 +332,7 @@ An example of this effect can be seen in \Cref{fig:graph4}.
 
 \subsection{The Expense of Sorting}
 Unfortunately, sorting data and keeping track of segments
-introduces great deal of extra work, whose expense has to be compared
-with the cost from being very non cache-effective.
-A comparison which is done best, simply by measuring performance on
-different implementations, which is exactly what we did.
+introduces great deal of extra work. Currently, memory transfers are still the larger evil, but if we imagine a scenario where the kernels were working harder and streaming made more sense, sorting likely becomes the prime bottleneck. We have not seen a way to get around this and at the same time fully utilize the shared memory on the GPU blocks. However, on a large input sorting is quick than chache-ineffeciency (as shown by our experiments).
 
 \subsection{Fusing Kernels, a future improvement}
 In the current, as shown in \Cref{fig:seg-offsets} computing the \tt{segment\_offset} array,
