@@ -239,6 +239,7 @@ we suggest reading the CUDA implementation for more details.
 However, we have a flowchart of the code that can be found in \Cref{fig:device-dia}.
 
 \section{Benchmarks}
+\label{section:bench}
 To evaluate our implementation, we have benchmarked it against
 a dataset of 10 million randomly generated elements.
 We have kept input data size constant,
@@ -319,26 +320,30 @@ This is because that we have a lot of synchronised writes to the same memory loc
 
 \section{Discussion}
 
+
 \subsection{Atomic addition}
-Using the atomic addition yiels specific corner case issues, 
-in the case for which we find a large number of datapoints fall into the same bin. 
-This cause for a more sequential execution, although we work in shared memory, 
-the wait between threads to access the same local histogram index cause for delay.
+Using atomic addition yiels specific corner case issues, 
+in the case for which we find a large number of datapoints falling into the same bin. 
+In those cases atomic addition runs almost sequentially, 
+therefore optimizations will not have had an effect.
+This is however a very unlikely real world application scenario,
+because of datasets are more likely to contain scattered datapoints.
+Even though we find the histogram containing a small number of bins, 
+we still see significant improvements compared to a naive implementation in figure \ref{fig:graph3} and \ref{fig:graph4}.
 
-
-Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
-the idea reveals a real bottleneck. Since all additions to the
-histogram must be atomic, the reduction part of the algorithm for
-such a small histogram
-exposes exactly 0 parallelism! But as the size of the global histogram
-expands, this problem becomes smaller and smaller.
-Hence, we expect the parrallel implementation to perform better when the
-histogram size expands, for a fixed input data size.
-An example of this effect can be seen in \Cref{fig:graph4}.
+%% Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
+%% the idea reveals a real bottleneck. Since all additions to the
+%% histogram must be atomic, the reduction part of the algorithm for
+%% such a small histogram
+%% exposes exactly 0 parallelism! But as the size of the global histogram
+%% expands, this problem becomes smaller and smaller.
+%% Hence, we expect the parrallel implementation to perform better when the
+%% histogram size expands, for a fixed input data size.
+%% An example of this effect can be seen in \Cref{fig:graph4}.
 
 \subsection{The Expense of Sorting}
 Unfortunately, sorting data and keeping track of segments
-introduces great deal of extra work. Currently, memory transfers are still the larger evil, but if we imagine a scenario where the kernels were working harder and streaming made more sense, sorting likely becomes the prime bottleneck. We have not seen a way to get around this and at the same time fully utilize the shared memory on the GPU blocks. However, on a large input sorting is quick than chache-ineffeciency (as shown by our experiments).
+introduces great deal of extra work. Currently, memory transfers are still the greater evil, but if we imagine a scenario where the kernels were working harder and streaming made more sense, sorting likely becomes the prime bottleneck. We have yet to see a way to get around this and at the same time fully utilize the shared memory on the GPU blocks. However, on a large input sorting is quicker than cache-ineffeciency (as shown in section \ref{section:bench} Benchmarks).
 
 \subsection{Kernel fusion}
 As seen in table~\Cref{table:nvprof0}, the relatively simple task of calculating the segment offsets
