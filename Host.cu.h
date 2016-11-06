@@ -12,7 +12,7 @@
 #include "Kernels.cu.h"
 #include "setup.cu.h"
 
-#define NUM_STREAMS 1
+#define NUM_STREAMS 2
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -194,7 +194,7 @@ unsigned long int largeHistogram(unsigned int image_size,
   return elapsed;
 }
 
-// @summary : Host wrapper for the segmented histogram
+// @summary : Host wrapper for the small histogram
 //            kernel.
 template <class T>
 unsigned long int smallHistogram(unsigned int image_size,
@@ -283,6 +283,10 @@ void streamHistogram(unsigned int image_size,
   naiveHistKernel<<<num_blocks, CUDA_BLOCK_SIZE, 0, stream>>>(image_size, d_inds, d_hist);
 }
 
+// Host wrapper for the streaming histogram kernel.
+// It uses the naive histogram kernel, because the
+// real bottleneck is copying the data to the
+// device.
 template <class T>
 unsigned int hostStreamHistogram(unsigned int  image_size,
                                  T*            image,
@@ -291,13 +295,15 @@ unsigned int hostStreamHistogram(unsigned int  image_size,
                                  T             max_e) {
 
 
-  unsigned int buf_size = 1024*1024;
+  const unsigned int buf_size = 1024*1024;
 
+  // Buffers for each stream.
   T *d_img_buf[NUM_STREAMS];
   unsigned int *d_inds_buf[NUM_STREAMS], *d_hist;
 
+  // Allocate the resulting histogram.
   cudaMalloc(&d_hist, sizeof(unsigned int)*hist_size);
-
+  // And the streams.
   cudaStream_t streams[NUM_STREAMS];
 
   for (int i = 0; i < NUM_STREAMS; i++) {
@@ -306,6 +312,8 @@ unsigned int hostStreamHistogram(unsigned int  image_size,
     gpuErrchk( cudaStreamCreate(&streams[i]) );
   }
 
+  // Reset the histogram, the idea is to not reset
+  // the histogram between invocations of the kernel.
   cudaMemset(d_hist, 0, sizeof(unsigned int)*hist_size);
 
   struct timeval t_start, t_end;
@@ -335,6 +343,14 @@ unsigned int hostStreamHistogram(unsigned int  image_size,
   cudaMemcpy(hist, d_hist, sizeof(int)*hist_size, cudaMemcpyDeviceToHost);
 
   gpuErrchk( cudaDeviceSynchronize() );
+
+  cudaFree(d_hist);
+
+  for (int i = 0; i < NUM_STREAMS; i++) {
+    cudaStreamDestroy(streams[i]);
+    cudaFree(d_img_buf[i]);
+    cudaFree(d_inds_buf[i]);
+  }
 
   return elapsed;
 

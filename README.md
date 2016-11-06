@@ -1,13 +1,26 @@
 Histogram project for Programming Massively Parrallel Hardware.
 
-histMain         -- Controls testing and benchmarking
+setup.cu.h        -- Contains histogram parameters, that are set before usage.
 
-setup.cu.h       -- Contains histogram parameters, that are set before usage.
+Host.cu.h         -- Kernel wrappers
 
-histDataGen.cu.h -- Generates arbitrarily large data arrays, of type T.
+Kernels.cu.h      -- Cuda kernels for computing large scale histograms
 
-Host.cu.h        -- Kernel wrappers
+NaiveHistTest.cu  -- Testing and benchmarking programs for the histogram kernels.
 
-Kernels.cu.h     -- Cuda kernels for computing large scale histograms
+StreamHistTest.cu -- Testing and benchmarking programs for async streaming.
 
-radix.cu         -- A test program where we are using Radix sort in CUB.
+To test the histogram do
+
+```
+make histtest
+./histtest <data_size> <bins>
+```
+
+To test the streaming do
+```
+make stream
+./stream <data_size> <bins>
+```
+
+Note that an upper bound for the data size (at the moment) is the size of a 32 bit unsigned integer.
