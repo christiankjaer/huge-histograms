@@ -10,6 +10,9 @@ NaiveHistTest.cu  -- Testing and benchmarking programs for the histogram kernels
 
 StreamHistTest.cu -- Testing and benchmarking programs for async streaming.
 
+sequential/...    -- A CPU implementation using OpenMP and some array helper
+                     functions.
+
 To test the histogram do
 
 ```
