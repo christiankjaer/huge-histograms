@@ -321,15 +321,15 @@ This is because that we have a lot of synchronised writes to the same memory loc
 \section{Discussion}
 
 
-\subsection{Atomic addition}
-Using atomic addition yiels specific corner case issues, 
-in the case for which we find a large number of datapoints falling into the same bin. 
-In those cases atomic addition runs almost sequentially, 
-therefore optimizations will not have had an effect.
-This is however a very unlikely real world application scenario,
-because of datasets are more likely to contain scattered datapoints.
-Even though we find the histogram containing a small number of bins, 
-we still see significant improvements compared to a naive implementation in figure \ref{fig:graph3} and \ref{fig:graph4}.
+%% \subsection{Atomic addition}
+%% Using atomic addition yiels specific corner case issues, 
+%% in the case for which we find a large number of datapoints falling into the same bin. 
+%% In those cases atomic addition runs almost sequentially, 
+%% therefore optimizations will not have had an effect.
+%% This is however a very unlikely real world application scenario,
+%% because of datasets are more likely to contain scattered datapoints.
+%% Even though we find the histogram containing a small number of bins, 
+%% we still see significant improvements compared to a naive implementation in figure \ref{fig:graph3} and \ref{fig:graph4}.
 
 %% Imagine the unlikely case of a histogram of size 1. Even though it makes little sense,
 %% the idea reveals a real bottleneck. Since all additions to the
