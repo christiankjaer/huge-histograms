@@ -334,17 +334,17 @@ An example of this effect can be seen in \Cref{fig:graph4}.
 Unfortunately, sorting data and keeping track of segments
 introduces great deal of extra work. Currently, memory transfers are still the larger evil, but if we imagine a scenario where the kernels were working harder and streaming made more sense, sorting likely becomes the prime bottleneck. We have not seen a way to get around this and at the same time fully utilize the shared memory on the GPU blocks. However, on a large input sorting is quick than chache-ineffeciency (as shown by our experiments).
 
-\subsection{Fusing Kernels, a future improvement}
-In the current, as shown in \Cref{fig:seg-offsets} computing the \tt{segment\_offset} array,
-requres full pass over the \tt{inds}. Futhermore, the mapping of $f$, also requires a full pass.
+\subsection{Kernel fusion}
+As seen in table~\Cref{table:nvprof0}, the relatively simple task of calculating the segment offsets
+poses a significant overhead. This is because it requires a full pass over the \tt{inds} array.
 
-Since the histogram kernel already does a full pass,
-it is safe to assume, that the three kernels can be fused together.
-On success, this would reduce the time computing the histogram with a
-significant factor: 15\% from the segment offsets, and 20\% from the index calculation according to
-\Cref{table:nvprof0}.
+The histogram kernel which is called right after the segment offset kernel also does a full
+pass over the \tt{inds} in the exact same order. We then suggest that one way of reducing
+this overhead is by doing the segment offset calculation in the histogram kernel while
+writing the indices into the histogram.
 
-\fig{seg-offsets}{140}{How we curently compute segment offsets.}
+We suspect that this will almost totally eliminate the overhead of calling the segment
+offsets kernel, and thereby reducing the runtime with about 15-20\%.
 
 \subsection{Streaming histogram computation}
 The profiling also showed that a lot of time was spent on copying data to the device,
@@ -401,16 +401,6 @@ It is in fact possible, to write a computationally efficient and scalable CUDA k
 to perform histogram computation for real world unsorted input data.
 However the overhead from copying data,
 causes the speedup from such an implementation to be much less significant than expected. Using streamning to hide memory latency only has an application if the computation time of kernels were larger (i.e. more work per thread is needed for efficiency).
-
-%% \section{Further improvements}
-%% Right now we are making a full pass over the index array to calculate
-%% the segment offsets into the index array.
-%% We are pretty sure it would be viable to fuse the segment offset
-%% kernel into the histogram kernel.
-%% Both kernels do a full pass over the index array,
-%% and this would reduce some of the overhead introduced
-%% by the optimised kerned. If successful,
-%% this would reduce reduce the time computing the histogram with a significant factor.
 
 
 % **************** The End ******************
