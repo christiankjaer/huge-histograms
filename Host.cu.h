@@ -234,9 +234,9 @@ unsigned long int smallHistogram(unsigned int image_size,
 }
 
 template <class T>
-unsigned long int naiveHistogram(unsigned int image_size,
-                                 T* d_image,
-                                 unsigned int histogram_size,
+unsigned long int naiveHistogram(unsigned int  image_size,
+                                 T*            d_image,
+                                 unsigned int  histogram_size,
                                  unsigned int* d_hist) {
 
 
@@ -291,7 +291,7 @@ unsigned int hostStreamHistogram(unsigned int  image_size,
                                  T             max_e) {
 
 
-  unsigned int buf_size = 1024*1024*16;
+  unsigned int buf_size = 1024*1024;
 
   T *d_img_buf[NUM_STREAMS];
   unsigned int *d_inds_buf[NUM_STREAMS], *d_hist;
@@ -301,8 +301,6 @@ unsigned int hostStreamHistogram(unsigned int  image_size,
   cudaStream_t streams[NUM_STREAMS];
 
   for (int i = 0; i < NUM_STREAMS; i++) {
-    cudaMalloc(&d_img_buf[i], sizeof(T)*buf_size);
-    cudaMalloc(&d_inds_buf[i], sizeof(unsigned int)*buf_size);
     cudaMalloc(&d_img_buf[i], sizeof(T)*buf_size);
     cudaMalloc(&d_inds_buf[i], sizeof(unsigned int)*buf_size);
     gpuErrchk( cudaStreamCreate(&streams[i]) );
