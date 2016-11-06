@@ -105,8 +105,19 @@ manner during the reduce-phase.
 \subsection{Optimising for Memory Performance}
 Since the \tt{inds} array is unpredictable,
 we expect worse cache performance with an increasing number of bins.
-Hence, to avoid unnessesarily evicting blocks,
-the cuda kernel has to work at small local histograms which fit into shared memory, and flush back into corresponding parts of the global histogram.
+This is because as the number of bins increase, the range of possible
+memory addresses increase as well. At some point we reach a size where
+we often have to bring in data from global memory instead of working
+from cache.
+
+Since random accesses to global memory on the GPU are very
+expensive, and result in a lot of cache misses, we would like
+to work on parts of the histogram, where all the memory accesses
+can fit into the fast shared memory for each CUDA block.
+
+This means that the cuda kernel has to work on small local histograms
+which fit into shared memory, and flush back into corresponding parts of the global histogram.
+
 In practice, this means partially sorting the
 input data into \it{segments}, where the values in a particular \it{segment}
 are numbers who all contribute to the same small \tt{gpu\_hist\_size} number of bins.\\
@@ -115,7 +126,7 @@ decided by the number of bins which can be held in the shared device memory,
 and the segment which a particular index value falls into
 is just (\tt{index\_value / gpu\_hist\_size}),
 we decided to partially sort the indexes by the bits more significant than those
-lower than \tt{gpu\_hist\_size} using radixSort. Radix sort has an efficient GPU
+lower than \tt{gpu\_hist\_size} using radix sort. Radix sort has an efficient GPU
 implementation in the Cub library for the CUDA API\footnote{\url{https://nvlabs.github.io/cub/}}.
 
 
