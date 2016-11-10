@@ -101,7 +101,7 @@ template <class T>
 void test_hist(unsigned int image_sz, unsigned int hist_sz) {
 
   printf("\nTesting histogram with\nimage size: %d\nhist size:%d\n", image_sz, hist_sz);
- 
+
   T* data = (T*)malloc(image_sz * sizeof(T));
   T* out = (T*)malloc(image_sz * sizeof(T));
   T* out_async = (T*)malloc(image_sz * sizeof(T));
@@ -117,10 +117,10 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
     hist[i] = 0;
     hist_naive[i] = 0;
   }
-  
+
   // naiveSquare<T>(image_sz, data, out);
   // asyncSquare<T> (image_sz, data, out_async);
-  
+
   //printFloatArraySeq(data, image_sz);
 
   T* d_data;
@@ -149,7 +149,7 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   // cudaFree(d_data);
 
   asyncHist<T>(image_sz, data, hist_sz, hist, 16.0);
-  
+
 
 
   //compareTest<unsigned int>(hist, hist_naive, hist_sz);
@@ -162,7 +162,7 @@ void test_hist(unsigned int image_sz, unsigned int hist_sz) {
   // printIntArraySeq(hist, hist_sz);
   printf("passed : %s\n", result ? "true" : "false");
   printf("LARGE SUM: %d, ASYNC SUM: %d\n", sumSeq<unsigned int>(hist_cpu, hist_sz), sumSeq<unsigned int>(hist, hist_sz));
-  
+
 
   cudaFree(d_data);
   free(data);
@@ -181,10 +181,10 @@ int main(int argc, char **argv) {
   } else {
     sscanf(argv[1], "%u", &image_sz);
     sscanf(argv[2], "%u", &hist_sz);
-    image_sz *= 8;
-    hist_sz *= 8;
+    // image_sz = 8;
+    // hist_sz *= 8;
   }
 
   test_hist<float> (image_sz, hist_sz);
-  
+
 }
