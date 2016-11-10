@@ -2,6 +2,7 @@
 #define KERNELS_HIST
 #include "setup.cu.h"
 
+
 // @summary : Computes the histogram indices based on a normalization of the data
 // @remarks : Assumes all values in the input array to be non-negative
 // @params  : input_arr_d -> the input values
